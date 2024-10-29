@@ -1,0 +1,46 @@
+{
+
+"manifest_version": 3,
+"name": "PulsusPlus",
+"description": "All-in-one Pulsus QoL toolkit",
+"version": "4.0",
+"version_name": "beta-v2.0-dev",
+"icons": {
+    "16": "static/icons/16.png",
+    "32": "static/icons/32.png",
+    "48": "static/icons/48.png",
+    "128": "static/icons/128.png",
+    "256": "static/icons/256.png"
+},
+"action": {
+    "default_icon": "static/icons/64.png",
+    "default_popup": "popup.html"
+},
+"background": {
+    "service_worker": "service-worker.js"
+},
+"content_scripts": [{
+    "matches": ["https://www.pulsus.cc/*", "https://pulsus.cc/*"],
+    "js": ["content-script.js"],
+    "all-frames": true
+}],
+"permissions": [
+    "storage",
+    "declarativeContent"
+],
+"host_permissions": [
+    "https://www.pulsus.cc/*",
+    "https://pulsus.cc/*"
+],
+"web_accessible_resources": [{
+    "matches": ["https://www.pulsus.cc/*", "https://pulsus.cc/*"],
+    "resources": [
+        "src/*",
+        "dist/*",
+        "static/*"
+    ]
+}, {
+    "matches": ["<all_urls>"],
+    "resources": ["editor/index.html"]
+}]
+}

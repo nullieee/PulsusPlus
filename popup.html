@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PulsusPlus</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Quicksand:wght@300..700&display=swap');
+        body {
+            font-family: Quicksand, sans-serif;
+            font-size: 16px;
+            width: 200px;
+            margin: 0;
+            padding: 20px;
+            background-color: #21212b;
+            color: #fff;
+            user-select: none;
+        }
+        p {
+            margin: 0;
+        }
+        span.keybind {
+            font-family: 'Jetbrains Mono', festive;
+            background-color: #6d6d7e;
+            font-size: 13px;
+            padding: 3px;
+            border-radius: 6px;
+        }
+        span.pp {
+            color: #00afff;
+            font-weight: 600;
+        }
+        span.toggle {
+            color: #62cdff;
+            font-weight: 600;
+        }
+        span.sub {
+            color: #999999;
+            font-style: italic;
+            font-size: .8rem;
+            font-weight: 400;
+        }
+        footer * {
+            font-size: 12px;
+            text-align: center;
+            color: #61616b;
+            margin: 0;
+        }
+        a {
+            color: #00fff2;
+        }
+        main {
+            position: relative;
+            z-index: 1;
+        }
+        #bg-container {
+            z-index: 0;
+            overflow: hidden;
+        }
+        #bg-img {
+            position: absolute;
+            top: -10px;
+            left: -20px;
+            opacity: 1;
+            filter: blur(7px) brightness(30%);
+            rotate: 8deg;
+            width: 120%;
+        }
+
+        .checkmark {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            flex-direction: column;
+            text-align: center;
+        }
+        input[type="checkbox"] {
+            opacity: 0;
+            appearance: none;
+            width: 50px;
+            height: 20px;
+            background-color: #808080;
+            border-radius: 10px;
+            transition: 100ms, scale 300ms;
+        } input[type="checkbox"]:checked {
+            background-color: #15ff00;
+        } input[type="checkbox"]:hover {
+            scale: 1.1;
+            filter: blur(1px) brightness(110%)
+        } input[type="checkbox"]:active {
+            filter: blur(2px) brightness(150%);
+            scale: 1.2
+        }
+    </style>
+    <script src="./popup.js" defer></script>
+</head>
+<body>
+    <main>
+        <p>
+            <span class="pp">PulsusPlus</span> operates entirely <b>in-game</b>! Press <span class="keybind">Shift + Tab</span>
+            in game to get started.
+        </p>
+        <hr>
+        <div class="checkmark">
+            <span class="toggle">Toggle PulsusPlus</span>
+            <span class="sub">Turns PulsusPlus on/off so you don't have to (refresh to apply)</span>
+            <input type="checkbox" id="toggle-extension" checked>
+        </div>
+        <hr>
+        <footer>
+            <a target="_blank" href="https://discord.gg/rMbHNb6AgU">Support Server</a> | <a target="_blank" href="https://github.com/floopy37/PulsusPlus">GitHub Repository</a>
+            <p>PulsusPlus, No Rights Reserved</p>
+        </footer>
+    </main>
+    <div id="bg-container">
+        <img id="bg-img" src="static/icons/256.png">
+    </div>
+</body>
+</html>
