@@ -9,8 +9,8 @@ window.addEventListener("WindowClassMade", function(){
         if(!Object.values(pulsusPlus.savedKeybinds).map(v => v.str).includes(keybind) && gameScreen === "game" && (game.edit || (!game.edit && !game.failed && !game.paused && !game.replay.on && !game.mods.auto && !e.repeat))) {
             for(let i = 0; i < game.keys.length; i++) {
                 if(game.edit && game.editorMode === 0 && !e.repeat && !prmptingString.active && !prmptingColor.active && game.menuSize <= .1) {
-                    if(e.code.indexOf(`Digit`) !== -1 && e.code !== "Digit0") {
-                        let key = [6, 7, 8, 3, 4, 5, 0, 1, 2][parseInt(e.code.substring(5))-1];
+                    if(e.code.search(/(Digit|Numpad(?![A-Za-z]))/) !== -1 && e.code.search(/0/) === -1) {
+                        let key = [6, 7, 8, 3, 4, 5, 0, 1, 2][parseInt(e.code.substring(e.code.search(/Numpad/) === -1 ? 5 : 6))-1];
                         if(game.beat.some(beat => beat[0] === key && beat[1] === round((game.time - game.timelineOffset*game.bpm/60/1e3) * (1/game.snap) * (game.timelineBPM / game.bpm)) / (1/game.snap * (game.timelineBPM / game.bpm)) + game.timelineOffset * game.bpm/60/1e3)) {
                             if(game.timelineMode === "scroll") {
                                 game.beat = game.beat.filter(beat => !(beat[0] === key && beat[1] === round((game.time - game.timelineOffset*game.bpm/60/1e3) * (1/game.snap) * (game.timelineBPM / game.bpm)) / (1/game.snap * (game.timelineBPM / game.bpm)) + game.timelineOffset * game.bpm/60/1e3));
@@ -32,7 +32,7 @@ window.addEventListener("WindowClassMade", function(){
                                 key,
                                 round((game.time - game.timelineOffset*game.bpm/60/1e3) * (1/game.snap) * (game.timelineBPM / game.bpm)) / (1/game.snap * (game.timelineBPM / game.bpm)) + game.timelineOffset * game.bpm/60/1e3,
                                 false,
-                                true,
+                                0,
                                 false,
                                 game.objType,
                                 game.holdLength / (game.timelineBPM / game.bpm),
@@ -259,7 +259,7 @@ window.addEventListener("WindowClassMade", function(){
 
     document.addEventListener("contextmenu", function(e) {
         if(e.button === 2 && gameScreen === "game" && game.editorMode === 0 && game.timelineMode === "select"){
-            const hovered = game.beat.map((beat, index) => [beat[1] === round((game.time - game.timelineOffset*game.bpm/60/1e3) * (1/game.snap) * (game.timelineBPM / game.bpm)) / (1/game.snap * (game.timelineBPM / game.bpm)) + game.timelineOffset * game.bpm/60/1e3, index]).filter(index => index[0]).map(index => index[1]);
+            const hovered = game.beat.map((beat, index) => [Math.abs(pulsusPlus.convertTime(game.time - beat[1])) <= game.snap / (game.timelineBPM/60) / 2 && (round(pulsusPlus.convertTime(beat[1]) / (game.snap / (game.timelineBPM/60)), 6)*game.snap) % game.snap === 0, index]).filter(index => index[0]).map(index => index[1]);
             const deselect = hovered.filter(index => game.selectedBeats.indexOf(index) !== -1).length === hovered.length;
             if(hovered.length === 0) return;
             if(deselect) {
