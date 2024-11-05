@@ -101,7 +101,7 @@ pulsusPlus.getMods = function(mods) {
         noFail: "NF", 
         noRelease: "NR",
         hidden: "HD",
-        flashslight: "FL",
+        flashlight: "FL",
         instantFail: "IF",
         perfect: "PF",
         random: "RD",
@@ -504,6 +504,7 @@ function completeSetup() {
         fitText: ["function", /textSize\(min/],
         formatTime: ["function", /"min:sec"===/],
         game: ["object", "beat"],
+        getKey: ["function", /if\((.{1,2})\.length<=1\)/],
         getLevelDownloadState: ["function", /\?1:0:2/],
         getLevelDuration: ["function", /\.ar<(.{1,2})\.hw/],
         getObject: ["function", /return .{1,2}\[.{1,2}\[.{1,2}\.length-1\]\]/],
@@ -530,6 +531,7 @@ function completeSetup() {
         pressKey: ["function", /newScore\.press\.push/],
         prmptingColor: ["object", "currentColor"],
         prmptingString: ["object", "vSet"],
+        prmptingStringUpdate: ["function", /"\\n"===/],
         promptRes: ["function", /"number"===.{1,2}\.check/],
         queueServer: ["function", /(.{1,2})\.queueType\.unshift/],
         refreshLevels: ["function", /case"dateDesc":return/],
@@ -1403,6 +1405,7 @@ window.addEventListener("SetupComplete", function() {
             .replace(`case"success"`, `case "warning": r = color(255, 175, 0);break;case "success"`)
             .replace(/\?\((.{1,2})\.loaded=!0/, "&& pulsusPlus.game.loaded ? (game.loaded = true")
         };
+        getKey = ${pulsusPlus.functionReplace(getKey, "start", `if(e === "Enter") return "\\n";`)}
         getScroll = ${pulsusPlus.functionReplace(getScroll, "start", `
             if(PulsusPlusWindow.allInstances.some(instance => instance.states.visible && hitbox(instance.z + "rcorner", instance.properties[0], instance.properties[1], instance.properties[2], instance.heightFixed/16 + Math.max(0, instance.menuHeight/1.25 - instance.heightFixed/32)) || instance.states.dragging || instance.menu.data.dropdownHitbox)) {
                 return false;
@@ -1512,7 +1515,7 @@ window.addEventListener("SetupComplete", function() {
             });
         `)};
         mouseClicked = ${pulsusPlus.functionReplace(mouseClicked, "start", `
-            PulsusPlusWindow.allInstances.filter(instance => instance.states.visible).forEach((instance) => {
+            PulsusPlusWindow.allInstances.filter(instance => instance.states.visible && !instance.states.dragging).forEach((instance) => {
                 if((hitbox(instance.z + "rcorner", instance.propertiesDis[0], instance.propertiesDis[1]+instance.heightFixed/16, instance.propertiesDis[2], instance.propertiesDis[3]-instance.heightFixed/32) || instance.menu.data.dropdownHitbox) && !instance.states.minimized) instance.menu.click();
                 if(!(Object.values(pulsusPlus.savedKeybinds).some(x => x.active)) && hitbox(instance.z + "rcorner", instance.propertiesDis[0]+instance.propertiesDis[2]-instance.heightFixedDis/12, instance.propertiesDis[1], instance.heightFixedDis/12, instance.heightFixedDis/16)) instance.topbarAction("toggle");
                 if(hitbox(instance.z + "rcorner", instance.propertiesDis[0]+instance.propertiesDis[2]-2*instance.heightFixedDis/12, instance.propertiesDis[1], instance.heightFixedDis/12, instance.heightFixedDis/16)) instance.topbarAction("maximize");
@@ -1755,7 +1758,7 @@ window.addEventListener("SetupComplete", function() {
             .replace(/\*(.{1,2})\.timelineOffset,(.{1,2})\.timeScroll/, `*0,game.timeScroll`)
             .replace(/\((.{1,2})\.timelineTickFor.*?ms"\)/, `(
                 (pulsusPlus.settings.timingPoints
-                ? (Math.round(1000 * (pulsusPlus.convertTime(game.time - pulsusPlus.targetSection.time) * pulsusPlus.targetSection.bpm/60)) / 3).toFixed(3) + " (" + pulsusPlus.targetSection.bpm + "BPM, " + round(pulsusPlus.convertTime(1e3 * pulsusPlus.targetSection.time)) + "ms + " + pulsusPlus.targetSection.offset + "ms)"
+                ? (Math.round(1000 * (pulsusPlus.convertTime(game.time - pulsusPlus.targetSection.time) * pulsusPlus.targetSection.bpm/60)) / 1000).toFixed(3) + " (" + pulsusPlus.targetSection.bpm + "BPM, " + round(pulsusPlus.convertTime(1e3 * pulsusPlus.targetSection.time)) + "ms + " + pulsusPlus.targetSection.offset + "ms)"
                 : game.timelineTickFor(game.time) + " (" + game.timelineBPM + ") (" + lang("milliseconds_short", langSel, game.timelineOffset) + ")")
                 + "\\n" + formatTime(pulsusPlus.convertTime(game.time) * 1e3, "min:sec:ms")
             `)
@@ -1851,15 +1854,20 @@ window.addEventListener("SetupComplete", function() {
             if(e.message.indexOf("PP_ERROR") !== -1 && e.type === "error" && pulsusPlus.settings.hideErrors) return;    
         `)};
         pressKey = ${pulsusPlus.functionReplace(pressKey, /\)&&\((.{1,2})\.keysPressed/, ") && (game.replay.on && pulsusPlus.game.kps.push(millis()), game.keysPressed")};
+        prmptingStringUpdate = ${pulsusPlus.functionReplace(prmptingStringUpdate, /"\\n"===(.*?),1\)/, "continue")};
         promptRes = ${pulsusPlus.functionReplace(promptRes, "start", `
-            if(prmptingString.inp.search(/^\\\\DNE\\\\/) === -1) {
+            if(prmptingString.check === "string") {
+                if(pulsusPlus.shiftKey && e === "submit") {
+                    prmptingStringUpdate(getKey("Enter"));
+                    return;
+                }
+            }
+            if(prmptingString.check === "number") {
                 try {
                     const buff = math.evaluate(prmptingString.inp) ?? prmptingString.inp;
                     if(typeof buff !== "number") throw Error("invalid exp");
                     prmptingString.inp = buff.toString();
                 } catch(error) {};
-            } else {
-                prmptingString.inp = prmptingString.inp.substring(5); 
             };
         `)};
         queueServer = ${pulsusPlus.functionReplace(queueServer, "start", `
