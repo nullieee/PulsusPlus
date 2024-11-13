@@ -259,7 +259,7 @@ window.addEventListener("WindowClassMade", function(){
 
     document.addEventListener("contextmenu", function(e) {
         if(e.button === 2 && gameScreen === "game" && game.editorMode === 0 && game.timelineMode === "select"){
-            const hovered = game.beat.map((beat, index) => [Math.abs(pulsusPlus.convertTime(game.time - beat[1])) <= game.snap / (game.timelineBPM/60) / 2 && (round(pulsusPlus.convertTime(beat[1]) / (game.snap / (game.timelineBPM/60)), 6)*game.snap) % game.snap === 0, index]).filter(index => index[0]).map(index => index[1]);
+            const hovered = game.beat.map((beat, index) => [Math.abs(pulsusPlus.convertTime(game.time - beat[1])) <= game.snap / (game.timelineBPM/60) / 2 && Number.isInteger(round((round((pulsusPlus.convertTime(beat[1]) - beat[10]/1e3) / (game.snap / (game.timelineBPM/60)), 6)*game.snap) / game.snap, 6)), index]).filter(index => index[0]).map(index => index[1]);
             const deselect = hovered.filter(index => game.selectedBeats.indexOf(index) !== -1).length === hovered.length;
             if(hovered.length === 0) return;
             if(deselect) {

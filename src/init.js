@@ -1,7 +1,8 @@
 // PulsusPlus configurations
 
 const pulsusPlus = {
-    version: "PREgamma-v0.1",
+    version: "PREgamma-v0.3",
+    dev: true,
     extensionURL: document.getElementById("extension-url").name,
     staticScales: {
         horizontal: [16/9/4, 9/16/3*1.25],
@@ -33,14 +34,13 @@ const pulsusPlus = {
         noteEndTimes: [],
         barProgress: 0,
         breakProgress: 0,
-        mods: {
-            endPos: 0
-        },
         UR: 0,
         hitStatsSumReal: 0,
         hitStatsSum: 0,
         ratio: "0:0",
         lastCalc: 0,
+        lvlDuration: 0,
+        hwUnrounded: 0,
         hw: 0,
         hwMs: 0,
         kps: [],
@@ -75,7 +75,10 @@ const pulsusPlus = {
     },
     effectClipboard: [],
     beatClipboard: [],
-    resultsScreenAppeared: false
+    resultsScreenAppeared: false,
+    menu: {
+        lvlSel: false
+    }
 };
 pulsusPlus.functionReplace = function(func=new Function(), match=new RegExp("", "s"), extraCode="", extraArgs=[]) {
     // Set default match regexps
@@ -507,6 +510,7 @@ function completeSetup() {
         getKey: ["function", /if\((.{1,2})\.length<=1\)/],
         getLevelDownloadState: ["function", /\?1:0:2/],
         getLevelDuration: ["function", /\.ar<(.{1,2})\.hw/],
+        getLevelLength: ["function", /return (.{1,2})\/(.{1,2})\*60/],
         getObject: ["function", /return .{1,2}\[.{1,2}\[.{1,2}\.length-1\]\]/],
         getScroll: ["function", /:navigator\.userAgent/],
         getSize: ["function", /return 1e9/],
@@ -1397,7 +1401,7 @@ window.addEventListener("SetupComplete", function() {
             gameScreen !== "game" && (
                 colorMode(HSB),
                 fill(255 * ((millis()/1000/10)%1), 102, 255),
-                text(\`PulsusPlus \$\{pulsusPlus.version\}\`, a, height-a-(2*textLeading())),
+                text(\`PulsusPlus \$\{pulsusPlus.version + (pulsusPlus.dev ? "-dev" : "")\}\`, a, height-a-(2*textLeading())),
                 fill(theme.text),
                 text(d + "\\nTetroGem 2024", a, height-a)
             ),pop()),
@@ -1428,10 +1432,14 @@ window.addEventListener("SetupComplete", function() {
         `)
             .replace("lvl.loading=!0)", `lvl.loading=!0)
             pulsusPlus.game.loaded = false
+            if(Math.abs(pulsusPlus.game.lvlDuration - game.mods.endPos) <= 1500) {
+                game.mods.endPos = 0;
+            };
             pulsusPlus.resultsScreenAppeared = false;
             pulsusPlus.game.UR = 0;
             pulsusPlus.game.noteTimes = game.beat.map(beat => beat[1]).sort((a, b) => a - b);
-            pulsusPlus.game.hw = round((clevels[menu.lvl.sel]?.local ? clevels[menu.lvl.sel].hw : newGrabLevelMeta(clevels[menu.lvl.sel], "id").hw) * game.mods.hitWindow, 2);
+            pulsusPlus.game.hwUnrounded = (clevels[menu.lvl.sel]?.local ? clevels[menu.lvl.sel].hw : newGrabLevelMeta(clevels[menu.lvl.sel], "id").hw) * game.mods.hitWindow;
+            pulsusPlus.game.hw = round(pulsusPlus.game.hwUnrounded, 2);
             pulsusPlus.game.hwMs = round((pulsusPlus.convertTime(game.hw) * 1e3) * game.hitValues[game.hitValues.length - 2].timing);
             pulsusPlus.game.barProgress = 0;
             pulsusPlus.game.breakProgress = 1;
@@ -1440,7 +1448,7 @@ window.addEventListener("SetupComplete", function() {
             },
                 JSON.stringify(pulsusPlus.game.noteTimes), JSON.stringify(game.beat)
             ).then(response => {
-                pulsusPlus.game.noteEndTimes = response;    
+                pulsusPlus.game.noteEndTimes = response;
                 pulsusPlus.game.loaded = true;
             });
             if(!game.retry) {
@@ -1689,7 +1697,7 @@ window.addEventListener("SetupComplete", function() {
                     /*millis() - pulsusPlus.game.lastCalc > 100 * Math.max(1, pulsusPlus.game.hitStatsSumReal / 750) && */ pulsusPlus.game.calculatedUR && pulsusPlus.game.hitStatsSum !== pulsusPlus.game.hitStatsSumReal && (
                         pulsusPlus.game.calculatedUR = false,
                         pulsusPlus.thread((gsd, arr) => { return gsd(arr) },
-                            pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => p[2]/2 * 1e4))
+                            pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => pulsusPlus.convertTime(p[2] * pulsusPlus.game.hwUnrounded * 1e4)))
                         ).then(response => {
                             pulsusPlus.game.UR = round(response);
                             pulsusPlus.game.calculatedUR = true;
@@ -1775,7 +1783,7 @@ window.addEventListener("SetupComplete", function() {
                 pulsusPlus.game.sectionOverflow = 0;
                 pulsusPlus.game.sectionHitbox = false;
                 pulsusPlus.thread((gsd, arr) => { return gsd(arr) },
-                    pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => p[2]/2 * 1e4))
+                    pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => pulsusPlus.convertTime(p[2] * pulsusPlus.game.hwUnrounded * 1e4)))
                 ).then(response => {
                     pulsusPlus.game.UR = round(response);
                 }),
@@ -1899,11 +1907,33 @@ window.addEventListener("SetupComplete", function() {
         saveGameData = ${pulsusPlus.functionReplace(saveGameData, "end", `
            localStorage.setItem("PulsusPlusSettings", JSON.stringify(pulsusPlus.settings));
            localStorage.setItem("PulsusPlusCustomThemes", JSON.stringify(pulsusPlus.themes));
-        `)};
+        `)
+            .replace(/localStorage\.setItem\("pulsusGammaNewLvl.*?\.saved\)\),/, `if(game.edit || gameScreen !== "game") {localStorage.setItem("pulsusGammaNewLvl", JSON.stringify(levels.saved))}`)
+        };
         sideView = ${pulsusPlus.functionReplace(sideView, "start", ``)
-            .replace(/\.mods\.endPos=(.{1,2})\.startMS/, ".mods.endPos = P.startMS, pulsusPlus.game.mods.endPos = P.startMS")
             .replace(/"menu_song_copyID"/, `pulsusPlus.shiftKey ? "menu_lvl_new" : "menu_song_copyID"`)
             .replace(/"id"\)\.special\)/g, `"id").special, newGrabUser(newGrabLevelMeta(clevels[t], "id").author, "uuid").user)`)
+            .replace(/,(.{1,2})\.lvl\.showMods\?(.{1,2})\.lvl\.modsX/, `,
+            (pulsusPlus.menu.lvlSel !== menu.lvl.sel || pulsusPlus.game.lvlDuration === 0) && (() => {
+                pulsusPlus.menu.lvlSel = menu.lvl.sel;
+                const sel = clevels[menu.lvl.sel];
+                const isLocal = typeof sel === "object";
+                let duration = 0;
+                if(isLocal) {
+                    lvl = sel;
+                    lvl.beat.sort((a, b) => (a[1] + (a[5] === 1 ? a[6] : 0)) - (b[1] + (b[5] === 1 ? b[6] : 0)));
+                    duration = getLevelLength(lvl.beat, lvl.bpm);
+                } else {
+                    lvl = newGrabLevelMeta(sel, "id");
+                    duration = lvl.len;
+                };
+                game.mods.startPos = 0;
+                game.mods.endPos = 0;
+                pulsusPlus.game.lvlDuration = duration;
+                menu.lvl.modsNSM.pages[0].items[menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_endPos")].max = duration;
+                menu.lvl.modsNSM.pages[0].items[menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_startPos")].max = duration;
+            })(),
+            Bt.lvl.showMods ? Bt.lvl.modsX`)
         };
         soundManager.setVolume = ${pulsusPlus.functionReplace(soundManager.setVolume, /setVolume\(/g, `setVolume((pulsusPlus.settings.masterVolume/100) *`)
             .replace(/_undefined/g, "undefined")
@@ -1918,46 +1948,25 @@ window.addEventListener("SetupComplete", function() {
         type: "slider",
         var: [game.mods, "startPos"],
         name: "mods_startPos",
-        hint: "PP_PRACTICE_SETUP_START-POS_HINT",
+        hint: "mods_startPos_sub",
         min: 0,
         max: 0,
         step: 1000,
         display: () => {
-            if(typeof clevels[menu.lvl.sel] === "object") {
-                clevels[menu.lvl.sel].beat.sort((a, b) => a[1] - b[1]);
-            };
-            const lvlLength = clevels[menu.lvl.sel]?.local ? pulsusPlus.convertTime(1e3 * (clevels[menu.lvl.sel].beat[clevels[menu.lvl.sel].beat.length - 1][1] + (clevels[menu.lvl.sel].beat[clevels[menu.lvl.sel].beat.length - 1][5] ? clevels[menu.lvl.sel].beat[clevels[menu.lvl.sel].beat.length - 1][6] : 0)))
-            : newGrabLevelMeta(clevels[menu.lvl.sel], "id").len;
-            if(menu.lvl.modsNSM.pages[0].items[startPosIndex].max !== lvlLength) {
-                game.mods.startPos = 0;
-                menu.lvl.modsNSM.pages[0].items[startPosIndex].max = lvlLength;
-            }
             return formatTime(game.mods.startPos, "min:sec");
         }
     };
     const endPosIndex = menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_endPos");
     menu.lvl.modsNSM.pages[0].items[endPosIndex] = {
         type: "slider",
-        var: [pulsusPlus.game.mods, "endPos"],
+        var: [game.mods, "endPos"],
         name: "mods_endPos",
-        hint: "PP_PRACTICE_SETUP_END-POS_HINT",
+        hint: "mods_endPos_sub",
         min: 0,
         max: 0,
         step: 1000,
         display: () => {
-            const lvlLength = clevels[menu.lvl.sel]?.local ? pulsusPlus.convertTime(1e3 * (clevels[menu.lvl.sel].beat[clevels[menu.lvl.sel].beat.length - 1][1] + (clevels[menu.lvl.sel].beat[clevels[menu.lvl.sel].beat.length - 1][5] ? clevels[menu.lvl.sel].beat[clevels[menu.lvl.sel].beat.length - 1][6] : 0)))
-            : newGrabLevelMeta(clevels[menu.lvl.sel], "id").len;
-            if(menu.lvl.modsNSM.pages[0].items[endPosIndex].max !== lvlLength) {
-                game.mods.endPos = 0;
-                pulsusPlus.game.mods.endPos = lvlLength;
-                menu.lvl.modsNSM.pages[0].items[endPosIndex].max = lvlLength;
-            };
-            if(lvlLength - pulsusPlus.game.mods.endPos < 1000) {
-                game.mods.endPos = 0;
-            } else {
-                game.mods.endPos = pulsusPlus.game.mods.endPos;
-            }
-            return formatTime(pulsusPlus.game.mods.endPos, "min:sec");
+            return formatTime(game.mods.endPos, "min:sec");
         }
     }
     window.addEventListener("resize", (e) => {

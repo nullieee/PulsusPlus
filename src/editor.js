@@ -543,6 +543,7 @@ window.addEventListener("WindowClassMade", function() {
                 };
                 game.editorMode = 0;
                 game.timelineMode = "select";
+                game.selectedBeats = [];
                 const bpmFactor = pulsusPlus.beatClipboard[0][9];
                 pulsusPlus.beatClipboard.forEach(beat => {
                     const newBeat = lodash.cloneDeep(beat);
@@ -699,7 +700,7 @@ window.addEventListener("WindowClassMade", function() {
                 };
                 pulsusPlus.effectClipboard = lodash.cloneDeep(game.effectMultiSel.map(i => game.effects[i]).sort((a, b) => a.time - b.time));
                 const firstEffectTime = pulsusPlus.effectClipboard[0].time;
-                pulsusPlus.beatClipboard.forEach(e => {
+                pulsusPlus.effectClipboard.forEach(e => {
                     e.time = pulsusPlus.convertTime(e.time - firstEffectTime) * (e.bpm/60);
                     e.moveTime = pulsusPlus.convertTime(e.moveTime) * (e.bpm/60);
                 });
@@ -728,6 +729,7 @@ window.addEventListener("WindowClassMade", function() {
                 };
                 game.editorMode = 1;
                 game.timelineMode = "select";
+                game.effectMultiSel = [];
                 const bpmFactor = pulsusPlus.effectClipboard[0].bpm;
                 pulsusPlus.effectClipboard.forEach(effect => {
                     const newEffect = lodash.cloneDeep(effect);

@@ -1,0 +1,55 @@
+.header-container {
+    width: 700px;
+    height: 100%;
+    margin: auto;
+    border: 3px solid rgb(50, 225, 255);
+    background-color: rgba(0, 0, 0, .35);
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.header {
+    text-align: center;
+    font-family: "Outfit", monospace;
+    font-weight: 800;
+    font-size: 32px;
+} .header.subheading {
+    font-weight: 500;
+    font-style: italic;
+    color: #8f8f8f;
+    font-size: 24px;
+}
+
+.link {
+    text-decoration: none;
+} .link:not(.blank,.list-item):hover {
+    text-decoration: underline;
+}
+
+.link.github {
+    color: rgb(73, 212, 126);
+    margin-right: 68px;
+}
+
+.link.version {
+    font-weight: 600;
+    color: rgb(73, 173, 212);
+}
+
+button.link.version {
+    border: none;
+    background: transparent;
+    font-weight: 600;
+    font-style: italic;
+    font-size: 24px;
+    margin: 0;
+    padding: 0;
+} button:not(.list-item).link.version:hover {
+    cursor: pointer;
+}
+
+.link.blank {
+    font-style: italic;
+    font-weight: 500;
+    color: #ffffff;
+}
