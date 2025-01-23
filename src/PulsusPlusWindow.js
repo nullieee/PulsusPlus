@@ -175,18 +175,44 @@ window.addEventListener("SetupComplete", () => {
     };
 
     document.addEventListener("wheel", e => {
+        const direction = e.deltaY > 0 ? 1 : -1;
+        if(e.altKey) {
+            pulsusPlus.settings.masterVolume = constrain(pulsusPlus.settings.masterVolume + (direction * -1) * (!e.shiftKey ? 5 : 1), 0, 100);
+            if(!Timeout.pending("volRing") && !Timeout.pending("volFadeIn")) {
+                Timeout.set("volFadeIn", () => {Timeout.set("volRing", () => {}, 1250)}, 100);
+            };
+            Timeout.set("volRing", () => {}, 1250);
+            return;
+        };
         if(pulsusPlus.game.sectionHitbox) {
-            pulsusPlus.game.sectionScroll = constrain(pulsusPlus.game.sectionScroll + (1/pulsusPlus.game.sectionOverflow * (e.deltaY/100)), 0, 1);
+            pulsusPlus.game.sectionScroll = constrain(pulsusPlus.game.sectionScroll + (1/pulsusPlus.game.sectionOverflow * direction), 0, 1);
+        };
+        if(!(pulsusPlus.altKey || PulsusPlusWindow.allInstances.some(instance => instance.states.visible && hitbox(instance.z + "rcorner", instance.properties[0], instance.properties[1], instance.properties[2], instance.heightFixed/16 + Math.max(0, instance.menuHeight/1.25 - instance.heightFixed/32)) || instance.states.dragging || instance.menu.data.dropdownHitbox))) {
+            if(game.edit && !game.playing && getScroll() !== 0) {
+                pulsusPlus.scrollTimeline(direction < 0 ? "LEFT" : "RIGHT", e.shiftKey);
+            }
+        }
+        if(pulsusPlus.sMenu.mods) {
+            for(let [k, v] of Object.entries(pulsusPlus.sMenu.modSliders).filter(entry => entry[1].hoverBg || entry[1].hoverBall)) {
+                let min = v.invert ? v.max : v.min;
+                let max = v.invert ? v.min : v.max;
+                game.mods[k] = round(constrain(game.mods[k] + (e.ctrlKey ? 5 : 1) * (v.invert ? -1 : 1) * (direction/100), min, max), 2);
+                v.hoverElementT = null;
+                pulsusPlus.sMenu.currToolTip = null;
+            }
+        }
+        if(pulsusPlus.sMenu.practice && pulsusPlus.sMenu.practiceHover) {
+            pulsusPlus.sMenu.practiceScroll = constrain(pulsusPlus.sMenu.practiceScroll + direction, 0, pulsusPlus.sMenu.practiceScrollMax)
         }
         PulsusPlusWindow.allInstances.forEach((instance) => {
             if(hitbox(instance.z + "rcorner", instance.propertiesDis[0], instance.propertiesDis[1]+instance.heightFixed/16, instance.propertiesDis[2], instance.propertiesDis[3]-instance.heightFixed/32) && !instance.states.minimized || instance.menu.data.dropdownHitbox) {
                 if(instance.menu.data.dropdownHitbox) {
                     instance.menu.pages[instance.menu.data.page].items.filter(x => x.type === "dropdown" && x?.open).forEach(dropdown => {
-                        dropdown.scroll += 1/dropdown.options.length * (e.deltaY/100);
+                        dropdown.scroll += 1/dropdown.options.length * direction;
                     })
                 } else {
                     if(instance.menu.data.overflow === 0) return;
-                    instance.scroll(e.deltaY/100);
+                    instance.scroll(direction);
                 }
             };
         });

@@ -1,8 +1,9 @@
 // PulsusPlus configurations
 
 const pulsusPlus = {
-    version: "PREgamma-v0.3",
+    version: "gamma-v1.0",
     dev: true,
+    updateNotice: false,
     extensionURL: document.getElementById("extension-url").name,
     staticScales: {
         horizontal: [16/9/4, 9/16/3*1.25],
@@ -30,6 +31,7 @@ const pulsusPlus = {
     skip: false,
     skipAuto: false,
     game: {
+        holding: 0,
         noteTimes: [],
         noteEndTimes: [],
         barProgress: 0,
@@ -44,12 +46,17 @@ const pulsusPlus = {
         hw: 0,
         hwMs: 0,
         kps: [],
+        maxKps: 0,
+        totKps: 0,
+        overlayStats: [false, false, false],
+        overlayStatsCount: 0,
         calculatedUR: true,
         loaded: false,
         sectionScroll: 0,
         sectionScrollDis: 0,
         sectionHitbox: false,
-        sectionOverflow: 0
+        sectionOverflow: 0,
+        score: 0
     },
     queuedPress: [...Array(9).keys()].map(x => false),
     pressedLetters: [...Array(9).keys()].map(x => false),
@@ -76,9 +83,39 @@ const pulsusPlus = {
     effectClipboard: [],
     beatClipboard: [],
     resultsScreenAppeared: false,
-    menu: {
-        lvlSel: false
-    }
+    sMenu: {
+        lvlSel: false,
+        tab: 0,
+        lastSel: false,
+        mods: false,
+        modsY: 0,
+        modsYDis: 0,
+        practice: false,
+        practiceY: 0,
+        practiceYDis: 0,
+        modBtn: {},
+        modsS: {},
+        currToolTip: null,
+        practiceDisabled: false,
+        practiceHover: false,
+        practiceSelected: -1,
+        practiceBtnHover: [],
+        practiceSections: [],
+        practiceScroll: 0,
+        practiceScrollDis: 0,
+        practiceScrollMax: 0,
+        practiceStart: [1, 0], //[0] -> mode (section 0 / time 1) [1] time
+        practiceEnd: [1, 0],
+        practiceUsed: false
+    },
+    prmptingString: false,
+    masterVolumeDis: 0,
+    printing: false,
+    backgrounds: {
+        blank: "",
+        black: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    },
+    dump: null
 };
 pulsusPlus.functionReplace = function(func=new Function(), match=new RegExp("", "s"), extraCode="", extraArgs=[]) {
     // Set default match regexps
@@ -95,26 +132,26 @@ pulsusPlus.functionReplace = function(func=new Function(), match=new RegExp("", 
 };
 
 // AT BPM FS HW NF NR HD FL IF PF RD MR NP NE
+pulsusPlus.modNames = {
+    auto: "AT",
+    bpm: "BPM",
+    foresight: "FS",
+    hitWindow: "HW", 
+    noFail: "NF", 
+    noRelease: "NR",
+    hidden: "HD",
+    flashlight: "FL",
+    instantFail: "IF",
+    perfect: "PF",
+    random: "RD",
+    mirror: "MR",
+    noPitch: "NP",
+    noEffects: "NE"
+};
 pulsusPlus.getMods = function(mods) {
-    const modNames = {
-        auto: "AT",
-        bpm: "BPM",
-        foresight: "FS",
-        hitWindow: "HW", 
-        noFail: "NF", 
-        noRelease: "NR",
-        hidden: "HD",
-        flashlight: "FL",
-        instantFail: "IF",
-        perfect: "PF",
-        random: "RD",
-        mirror: "MR",
-        noPitch: "NP",
-        noEffects: "NE"
-    };
     
     let result = [];
-    Object.entries(modNames).forEach(entry => {
+    Object.entries(pulsusPlus.modNames).forEach(entry => {
         const key = entry[0];
         const value = entry[1];
         if(typeof mods[key] === "boolean" && mods[key] !== false) {
@@ -181,6 +218,18 @@ pulsusPlus.setParameters = function(params) {
     }
     eval(final);
 };
+// Damn consts
+pulsusPlus.forceSetObjectParameters = function(params) {
+    let final = "";
+    for(param of Object.entries(params)) {
+        // [0] -> name, [1][0] -> minified, [1][1] -> property check, [1][2] -> minified name
+        if(typeof param[1][0][param[1][1]] === "undefined") {
+            alert("This version of PulsusPlus seems to be outdated! Please try updating it, if the error still persists, let the dev team know!\\nERROR CODE: 2")
+        };
+        final += `Object.defineProperty(globalThis,'${param[0]}',{get:()=>{return ${param[1][2]}},set:(val)=>{${param[1][2]}=val}});`
+    };
+    eval(final);
+}
 pulsusPlus.setParameters({
     loadGame: ["function", /,.*?=\[\{main/]
 })
@@ -354,7 +403,25 @@ pulsusPlus.testAudio = function(url) {
     });
 };
 
-pulsusPlus.downloadJSON = function(filename, dataObjToWrite) {
+pulsusPlus.downloadJSON = function(filename, dataObjToWrite, JSZipType) {
+    if(typeof JSZipType === "string") {
+        switch(JSZipType) {
+            case "phz":
+            case "pls":
+                let zip = new JSZip();
+                zip.file(filename, JSON.stringify(dataObjToWrite));
+                zip.generateAsync({ type: "blob", compression: "DEFLATE" }).then(blob => {
+                    const pseudoDownload = document.createElement("a");
+                    const downloadURL = window.URL.createObjectURL(blob);
+                    pseudoDownload.href = downloadURL;
+                    pseudoDownload.download = `${dataObjToWrite.title.replace(/[^a-zA-Z0-9 ]/g, '')}.${pulsusPlus.settings.lvlExportMode}`;
+                    pseudoDownload.click();
+                    URL.revokeObjectURL(downloadURL);
+                });
+                break;
+        }
+        return;
+    }
     const blob = new Blob([JSON.stringify(dataObjToWrite)], { type: "text/json" });
     const link = document.createElement("a");
     link.download = filename;
@@ -374,12 +441,23 @@ pulsusPlus.reader = function(file) {
         const fr = new FileReader();
         fr.onload = () => resolve([fr, file.name]);
         fr.onerror = (err) => reject(err);
-        if(file.type.search(/json/) !== -1 || file.type.search(/text/) !== -1 || (file.type === "" && file.name.split(".")[file.name.split(".").length - 1] === "osu")) {
+        if(file.type.search(/json/) !== -1 || file.type.search(/text/) !== -1 || (file.type === "" && file.name.split(".")[file.name.split(".").length - 1].match(/chart|osu/))) {
             fr.readAsText(file);
         } else if(file.type.search(/audio/) !== -1) {
             fr.readAsDataURL(file);
         } else {
-            reject(`Unsupported file type "${file.type === "" ? file.name.split(".")[file.name.split(".").length - 1] : file.type}"`);
+            if(/\.(phz|pls)$/.exec(file.name)) {
+                let jsz = new JSZip();
+                jsz.loadAsync(file).then(zip => {
+                    zip.files[Object.keys(zip.files)[0]].async('string').then(fileData => {
+                        fr.readAsText(new Blob([fileData], {
+                            type: "application/json"
+                        }));
+                    });
+                });
+            } else {
+                reject(`Unsupported file type "${file.type === "" ? file.name.split(".")[file.name.split(".").length - 1] : file.type}"`);
+            }
         }
     });
 };
@@ -459,7 +537,17 @@ osuImport.addEventListener("change", (e) => {
             data.forEach(result => pulsusPlus.importOsu(result));
         });
 });
-document.body.appendChild(osuImport);
+const chImport = document.createElement("input")
+chImport.className = "pulsus-plus";
+chImport.id = "ch-import";
+chImport.addEventListener("change", (e) => {
+    if(!e.target.files || [...e.target.files].length !== 1) return;
+    pulsusPlus.fetchFileData([...e.target.files])
+        .then(data => {
+            data.forEach(result => pulsusPlus.importCH(result));
+        });
+});
+document.body.appendChild(chImport);
 const songImport = document.createElement("input")
 songImport.className = "pulsus-plus";
 songImport.id = "song-import";
@@ -481,8 +569,11 @@ document.querySelectorAll(".pulsus-plus").forEach(element => {
         e.target.value = null;
     });
 });
+levelImport.accept += ", .phz, .pls";
 osuImport.accept = ".osu, .txt";
 osuImport.multiple = false;
+chImport.accept = ".chart";
+chImport.multiple = false;
 songImport.accept = "audio/*";
 songImport.multiple = false;
 
@@ -492,7 +583,10 @@ function completeSetup() {
 
     // Functions and objects
     pulsusPlus.setParameters({
+        addSection: ["function", /sections\.push\(\{time:/],
         adjustCanvas: ["function", /resizeCanvas/],
+        calcScoreMulti: ["function", /log\(\.5\)/],
+        calcTextWidth: ["function", /if\(textFont/],
         checkHolds: ["function", /disMode&&!0===(.{1,2})\.keysHeld\[.*?\]/],
         clickMenu: ["object", "screens"], // This is actually a function lol
         copyLevel: ["function", /message:"menu_lvl_copied"/],
@@ -501,6 +595,7 @@ function completeSetup() {
         createLevel: ["function", `New Map",`],
         cycleSnap: ["function", /\.snap=\.25/],
         drawDifficultyCircle: ["function", /new (.{1,2})\(.*?\)\.draw\(.*?\)\}/],
+        drawDiscord: ["function", /discord:!1/],
         drawProfile: ["function", "menu_account_joinedSince"],
         drawScreens: ["function", /\,"hidden"\!==/],
         ease: ["function", /return Number\.isNaN\(.{1,2}\)/],
@@ -511,8 +606,10 @@ function completeSetup() {
         getLevelDownloadState: ["function", /\?1:0:2/],
         getLevelDuration: ["function", /\.ar<(.{1,2})\.hw/],
         getLevelLength: ["function", /return (.{1,2})\/(.{1,2})\*60/],
+        getMods: ["function", /"mods_none"/],
         getObject: ["function", /return .{1,2}\[.{1,2}\[.{1,2}\.length-1\]\]/],
         getScroll: ["function", /:navigator\.userAgent/],
+        getSelectedLevel: ["function", /sel\?"number"==/],
         getSize: ["function", /return 1e9/],
         getSongInfo: ["function", /explicit:\!1/],
         hitbox: ["function", /"rcorner"===.{1,2}/],
@@ -524,7 +621,9 @@ function completeSetup() {
         loadMenuMusic: ["function", /pulsusMenu\.mp3/],
         loadSong: ["function", /mods.noPitch\|\|void 0/],
         loadStartScreens: ["function", /\{background\(255\)/],
+        mapBeat: ["function", /beat\.some/],
         menu: ["object", "settings"],
+        menuLoadDropdown: ["object", "finishFade"],
         musicManager: ["function", /oldAr,9999/],
         newGrabLevel: ["function", /.{1,2}\.newGrabbedLevels\[.{1,2}\]:void 0/],
         newGrabLevelMeta: ["function", /.{1,2}\.newGrabbedLevels\[.{1,2}\]:.:void 0/],
@@ -536,16 +635,21 @@ function completeSetup() {
         prmptingColor: ["object", "currentColor"],
         prmptingString: ["object", "vSet"],
         prmptingStringUpdate: ["function", /"\\n"===/],
+        promptColor: ["function", /hsbNSM\.pages/],
         promptRes: ["function", /"number"===.{1,2}\.check/],
+        promptString: ["function", /\.allowEmptyString=!0/],
         queueServer: ["function", /(.{1,2})\.queueType\.unshift/],
+        quitEditor: ["function", /"menu","game"/],
         refreshLevels: ["function", /case"dateDesc":return/],
         releaseKey: ["function", /newScore\.release\.push/],
         resetclevels: ["function", /\{return .{1,2}=\[\]/],
         saveGameData: ["function", /setItem\("pulsusGammaLvlScores/],
+        scrollTimeline: ["function", /"LEFT"===/],
         server: ["object", "newGrabbedLevels"],
         setObject: ["function", /(.{1,2})\[(.{1,2})\[(.{1,2})\.length-1\]\]=(.{1,2})/],
         sideView: ["function", /(.{1,2})\.startMS/],
         theme: ["object", "main"],
+        togglePlayback: ["function", /\.playing=!0/],
         transitionScreen: ["function", /dropTime=millis\(\),/],
         user: ["object", "recievedAll"],
         welcome: ["object", "startTime"]
@@ -561,11 +665,18 @@ function completeSetup() {
         welcomeBorders: ["variable", loadStartScreens, /abs\((.{1,2})\[/, 1],
         themes: ["variable", loadGame, /\},(.{1,2})=\[\{main/, 2],
         tooltipText: ["variable", drawScreens, /(.{1,2})\((.{1,2}),mouseX/, 2, true],
-        DifficultyCircle: ["variable", drawDifficultyCircle, /new (.{1,2})\(/, 1] // This is a class,
+        DifficultyCircle: ["variable", drawDifficultyCircle, /new (.{1,2})\(/, 1] // This is a class
+    });
+    // Damn consts
+    pulsusPlus.forceSetObjectParameters({
+        practiceSetup: [vt, "computeSections", "vt"],
+        deleteConfirmation: [_o, "rotateTrans", "_o"]
     })
 
     // I'm sorry i have to do this
     eval(`
+        pulsusPlus.scrollTimeline = ${pulsusPlus.functionReplace(scrollTimeline, "4", "1/game.snap").replace("16", "4/game.snap")};
+        scrollTimeline = function(){};
         pulsusPlus.forceEase = ${pulsusPlus.functionReplace(ease, /(.{1,2})\.settings\.disableEase/, "false")};
         newSettingsMenu.prototype.draw = ${pulsusPlus.functionReplace(newSettingsMenu.prototype.draw, /fill\(255\)/, `fill(${pulsusPlus.getParameter("object", "main")}.text)`)
             .replace(`"slider"===`, `!pulsusPlus.settings.replaceSliders && "slider"===`)
@@ -875,6 +986,7 @@ function completeSetup() {
         canvasY: 0,
         comboBreak: "",
         cycleArrowKeys: true,
+        defaultBg: "blank",
         detailedCanvas: true,
         fadeOnEnd: true,
         fixDC: true,
@@ -885,7 +997,10 @@ function completeSetup() {
         holdRelease: "",
         holdReleaseVolume: menu.settings.hitsoundVolume,
         keybindFocus: false,
+        lvlExportMode: "json",
         masterVolume: 100,
+        mpMode: true,
+        noteFade: true,
         overlayLetters: {
             hue: 141,
             saturation: 100,
@@ -902,10 +1017,14 @@ function completeSetup() {
         replaceSliders: false,
         resolution: "noResize",
         retryTime: 300,
+        scoreSystem: "pulsus",
         sfxVolume: 50,
         showDetailedJudgements: true,
         showMods: true,
         showOverlay: true,
+        showOverlayKps: true,
+        showOverlayMax: true,
+        showOverlayTot: true,
         skipWelcome: false,
         syncWelcome: true,
         tabIcon: "data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAMMOAADDDgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkMVoAAAAUAYuWrh3HxcBp286wv6mkmnwAAAAEBwcHAAAAAAAAAAAAo6SmAKWnqQiXnKQvlpqfN5GRkjd2eX83iY2WRdHKuYDt0pjN+shb+P+/Mf/fyZfTcniCTHp+giwgHx8IJycnAPHq3wD07uRH3byI5dGvee3Tw6vs3NG57O3LgfT9wkH+/7QO//+uAP//rgD/98lk/cOujfLRupfTeXyBLY2NjQAAAAAA2tfUa9e1f//ivHb/98dh//+8J///sQT//64A//+vAP//rwD//64A//+7Jf/Sr3H/y6hy7JeboTeurq4A4te+lfHRjeH8xk7//7cV//+vAP//rgD//68A//+vAP//rwD//68A//+vAP//sAP/7sVw/8OwlOySk5U3ra2tAP/fmu7/sw3//64A//+vAP//rwD//68A//+vAP//rwD//68A//+vAP//rwD//64A//7BPP/LwrDta21wN4iIiAD/7sih/7wp//+uAP//rwD//68A//+vAP//rwD//68A//+vAP//rwD//68A//+vAP//tAz/4smU82NocUWFhoYA////Qv/Qa+z/rgD//68A//+vAP//rwD//68A//+vAP//rwD//68A//+vAP//rwD//64A//jFVv6opqF2////AP///wr/5q+w/7YW//+vAP//rwD//68A//+vAP//rwD//68A//+vAP//rwD//68A//+uAP//uB3/28igvzQ+Uxr/9N0A//rtaf/IUv//rgD//68A//+vAP//rwD//68A//+vAP//rwD//68A//+vAP//rwD//68A//TLcfCWmJ1d/vz5AP7//1z+4aL+/7EG//+vAP//rwD//68A//+vAP//rwD//68A//+vAP//rwD//68A//+tAP//vjP/yr+ntPnu3QD57+Bc8tam/v++Mf//rgD//68A//+vAP//rwD//68A//+vAP//rwD//64A//+xB///vi7//tR37OTZw5P47NkA+OzaXOGya/75yWf//68A//+vAP//rwD//68A//+uAP//rgD//7QQ//7DRP/2ynL/7NWs8szOzlj///8F+fDhAPry5lXjtW/789KV//+4Hf//rgD//64A//+wBP//uyX//9Fu/vvir/7sypT+3qpZ/9+/jeWZnaUvra2tAP78+QD+/PoV+vLmU/337YD/y1r1/7IK///CPf3/2ILe/uzFlP79+V78+fVb+OzaXPnu3Vzz7eRHpKapCK6urgAAAAAAAAAAAP///wD///8S/+m5xv/hn+D+89yA/P//Kfb//wP5//8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/gcAAIABAACAAQAAgAEAAAABAAAAAQAAAAEAAAABAAAAAAAAgAAAAIAAAACAAAAAgAAAAIABAACAAQAA4H8AAA==",
@@ -983,6 +1102,82 @@ function completeSetup() {
         };
     };
 
+    pulsusPlus.importCH = function(data) {
+        console.log(data)
+        const resolution = parseInt(data[0].replace(/ /g, "").split("Resolution=")[1].split(/[A-Za-z]/)[0]);
+        let timings = data[0].replace(/(\n|\r\n)/g, "LINEBREAK").replace(/ /g, "").match(/\[SyncTrack\](.*?)\}/)[1].split("LINEBREAK").filter(x => x.match(/B/));
+        let points = [];
+        timings.forEach((timing, index) => {
+            /*
+            The calculation of time in seconds from one tick position to the next at a constant BPM is defined as follows-
+            (tickEnd - tickStart) / resolution * 60.0 (seconds per minute) / bpm
+            Therefore to calculate the time any event takes place requires precalculation of the times between all the BPM events that come before it.
+            */
+            let secondsBeforeTiming = 0;
+            let startTime = 0
+            const tickStart = parseInt(timing.replace(/=.*$/, ""))/resolution;
+            const bpm = parseInt(timing.replace(/^.*B/, ""))/1000;
+            if(index !== 0) {
+                const lastTiming = points[index-1];
+                secondsBeforeTiming = lastTiming.startTime;
+                startTime = round(secondsBeforeTiming + (tickStart - lastTiming.tickStart) * 60000 / lastTiming.bpm)
+            }
+            points[index] = {
+                startTime, tickStart, bpm
+            }
+        });
+        points.sort((a, b) => a.tickStart - b.tickStart);
+        let firstTime = lodash.cloneDeep(points[0]);
+        points.forEach(point => {
+            point.startTime -= firstTime.startTime;
+            point.tickStart -= firstTime.tickStart;
+        })
+        function timeFromTick(tick) {
+            let finalTime = 0;
+            let sectionBPM = points.filter(p => p.tickStart <= tick);
+            sectionBPM = sectionBPM[sectionBPM.length - 1].bpm;
+            while(tick > 0) {
+                let filteredPoints = points.filter(p => p.tickStart < tick)
+                const currSection = filteredPoints[filteredPoints.length - 1];
+                const ticksElapsed = tick - currSection.tickStart;
+                finalTime += round(ticksElapsed * 60000 / currSection.bpm);
+                tick -= ticksElapsed;
+            }
+            return [finalTime, sectionBPM];
+        }
+
+        let sections = data[0].replace(/(\n|\r\n)/g, "LINEBREAK").match(/\[Events\](.*?)\}/)[1].split("LINEBREAK").filter(x => x.match(/"section/)).map(section => {
+            const name = section.replace(/(^.*?section |"$)/g, "");
+            const tickStart = parseInt(section.replace(/(-.*$)/g, ""))/resolution;
+            const [startTime, bpm] = timeFromTick(tickStart);
+            return {
+                name, startTime, tickStart, bpm
+            }
+        });
+        points = points.filter(point => !sections.some(section => point.tickStart === section.tickStart));
+        console.log(sections, points)
+        const changes = [...sections, ...points].map(point => {
+            const isSection = typeof point.name !== "undefined"
+            return {
+                name: isSection ? point.name : `${point.bpm}BPM`,
+                time: pulsusPlus.convertTime(point.startTime/1000, "pulsus"),
+                offset: point.startTime,
+                bpm: point.bpm,
+                color: isSection ? 141 : 0,
+                saturation: isSection ? 255 : 205,
+                brightness: 255,
+                visible: isSection
+            }
+        });
+        game.sections = changes;
+        popupMessage({
+            type: "success",
+            message: "PP_SUCCESS_CH-IMPORT",
+            keys: [timings.length, sections.length]
+        });
+        
+    }
+
     pulsusPlus.importOsu = function(data) {
         let timings = data[0].replace(/(\n|\r\n)/g, "LINEBREAK").match(/\[TimingPoints\](.*?)\[/)[1].split("LINEBREAK").map(point => point.split(",").map(p => parseFloat(p)));
         timings.shift();
@@ -1010,19 +1205,7 @@ function completeSetup() {
                 visible: false
             }
         });
-        if(game.sections.length === 1 && lodash.isEqual(game.sections[0], {
-            time: 0,
-            offset: 0,
-            name: "New Bookmark",
-            visible: false,
-            bpm: game.beat[0]?.[9] ?? 120,
-            color: 141,
-            saturation: 255,
-            brightness: 255
-        })) {
-            game.sections.pop();
-        }
-        game.sections.push(...changes);
+        game.sections = changes;
         popupMessage({
             type: "success",
             message: "PP_SUCCESS_OSU-IMPORT",
@@ -1052,6 +1235,12 @@ function completeSetup() {
                 throw Error("invalid mode " + to);
         };
     };
+
+    pulsusPlus.jumpTo = function(timePulsus) {
+        if(game.playing) togglePlayback();
+        game.time = timePulsus;;
+        if(game.playing) togglePlayback();
+    }
 
     document.title = pulsusPlus.settings.tabName
     document.querySelector("link[rel='icon']").href = pulsusPlus.settings.tabIcon
@@ -1260,8 +1449,8 @@ function completeSetup() {
         levels.saved[index].effects = reference.effects;
         levels.saved[index].sections = reference.sections;
         levels.saved[index].bpm = reference.bpm;
-        levels.saved[index].ar = 2;
-        levels.saved[index].hw = 2;
+        levels.saved[index].ar = 1;
+        levels.saved[index].hw = 1;
         levels.saved[index].hpD = 15;
         levels.saved[index].song = reference.song;
         levels.saved[index].bg = reference.bg;
@@ -1276,7 +1465,583 @@ function completeSetup() {
         if(game.edit) {
             loadLevel(index, "new");
         }
+    };
+
+    pulsusPlus.computeSections = function() {
+        const lvlSel = getSelectedLevel();
+        if(!lvlSel || typeof lvlSel?.sections === "undefined") {
+            return [];
+        } else {
+            const sections = lvlSel.sections.filter(section => section.visible);
+            pulsusPlus.sMenu.practiceScroll = 0;
+            pulsusPlus.sMenu.practiceScrollDis = 0;
+            pulsusPlus.sMenu.practiceScrollMax = Math.max(((sections.length * height/12) - (height-height/8-height/24+height/48 - height/6))/(height/12), 0);
+            pulsusPlus.sMenu.practiceBtnHover = [...Array(sections.length).keys()].map(x => [-1, 0]);
+            pulsusPlus.sMenu.practiceSelected = -1;
+            pulsusPlus.sMenu.practiceStart = [1, 0];
+            pulsusPlus.sMenu.practiceEnd = [1, pulsusPlus.game.lvlDuration];
+            return sections.map(section => {
+                push();
+                colorMode(HSB);
+                const col = color(section.color, section.saturation, section.brightness);
+                pop();
+                return {
+                    name: section.name,
+                    color: col,
+                    time: section.time / lvlSel.bpm * 60 * 1e3,
+                    hover: false,
+                    hoverDis: 0
+                }
+            });
+        }
     }
+
+    pulsusPlus.lvlSelAction = function(action) {
+        if(clevels.length === 0) return;
+        const topOffset = height / 16 + height / 24;
+        const cardHeight = height / 12;
+        const fixedHeight = height - topOffset;
+        const lvls = clevels.length;
+        switch(action) {
+            case "randomMap":
+                menu.lvl.sel = Math.floor(clevels.length * Math.random());
+
+
+                menu.lvl.scroll = constrain(
+                    (11 * fixedHeight * (-cardHeight * ((2*menu.lvl.sel) + 1) + fixedHeight))
+                  / (24 * (fixedHeight - (cardHeight * lvls)))
+                , 0, height - (height / 16 + height / 24 + (height - (height / 16 + height / 24)) / 12));
+    
+                lowLag.play("scroll", pulsusPlus.settings.sfxVolume/100);
+                break;
+            case "scrollUp":
+            case "scrollDown":
+                const direction = action.search(/up/gi) !== -1 ? -1 : 1;
+                if(menu.lvl.sel === false) {
+                    if(direction === -1) return;
+                    menu.lvl.sel = 0;
+                } else {
+                    if((menu.lvl.sel === 0 && direction === -1) || (menu.lvl.sel === clevels.length - 1 && direction === 1)) return;
+                    menu.lvl.sel = constrain(menu.lvl.sel + direction, 0, clevels.length - 1);
+                }
+
+                menu.lvl.scroll = constrain(constrain(
+                    menu.lvl.scroll,
+    
+                    (11 * fixedHeight * (fixedHeight - cardHeight * (menu.lvl.sel + 1)) )
+                  / (12 * (fixedHeight - (cardHeight * lvls))),
+    
+                  (11 * fixedHeight * menu.lvl.sel * cardHeight)
+                  / (12 * ((cardHeight * lvls) - fixedHeight))
+                ), 0, height - (height / 16 + height / 24 + (height - (height / 16 + height / 24)) / 12));
+                
+                lowLag.play("scroll", pulsusPlus.settings.sfxVolume/100);
+                break;
+        }
+    };
+
+    pulsusPlus.refreshLvl = function() {
+        levels.search = [];
+        menu.lvl.scroll = 0;
+        menu.lvl.sel = false;
+        menu.lvl.searchSent = false;
+        menu.lvl.viewSkip = 0;
+    };
+
+    pulsusPlus.sMenu.modBtn = Object.fromEntries(Object.keys(pulsusPlus.modNames).filter(m => typeof game.mods[m] === "boolean" && m !== "noPitch").map(x => {
+        return [x, {
+            hover: false,
+            hoverDis: 0,
+            click: false,
+            clickDis: 0,
+            hitbox: false,
+            hitboxT: null,
+            pressed: false
+        }]
+    }));
+
+    pulsusPlus.modButton = function(name, x, y) {
+        const nameAc = pulsusPlus.modNames[name];
+        const vw = width / 48;
+        const curr = pulsusPlus.sMenu.modBtn[name];
+        curr.hoverDis += ease(((mouseIsPressed && mouseButton === LEFT && curr.hitbox) || curr.pressed ? .2 : 0) + (curr.hover ? .2 : 0), curr.hoverDis, .2);
+        curr.clickDis += ease(game.mods[name] ? .8 : 0, curr.clickDis, .2);
+        x += vw*1.5;
+        y += vw*1.5;
+        const totalDis = curr.hoverDis + curr.clickDis;
+        push();
+        rectMode(CENTER);
+        curr.hitbox = pulsusPlus.modsHitbox("rcenter", matrix.get().x + x, matrix.get().y + y, vw*(3 * (1 + totalDis * .2)), vw*(3 * (1 + totalDis * .2)));
+        if(curr.hitboxT === null && curr.hitbox) {
+            curr.hitboxT = millis();
+        } else if(curr.hitboxT !== null && !curr.hitbox) {
+            curr.hitboxT = null;
+        }
+        curr.hover = curr.hitbox;
+        translate(-totalDis*.2 * vw*1.5, -totalDis*.2 * vw*1.5);
+        angleMode(DEGREES);
+        translate(x - vw*1.5, y - vw*1.5);
+        rotate(22.5/5 * curr.clickDis/.8);
+        scale(1 + totalDis * .2);
+        translate(vw*1.5, vw*1.5)
+        noStroke();
+        fill(lerpColor(theme.buttonDown, theme.buttonUp, totalDis));
+        rect(0, 0, vw*3, vw*3, vw/3);
+        textAlign(CENTER, CENTER);
+        textStyle(NORMAL);
+        textSize(vw*1.5);
+        fill(theme.text);
+        text(nameAc, 0, 0);
+        pop();
+        if(curr.hitboxT !== null) {
+            if(millis() - curr.hitboxT >= 750) {
+                pulsusPlus.sMenu.currToolTip = name;
+            }
+        }
+    };
+
+    pulsusPlus.sMenu.modSliders = Object.fromEntries(Object.keys(pulsusPlus.modNames).filter(m => typeof game.mods[m] === "number" && !m.match(/pos/gi)).map(x => {
+        return [x, {
+            hoverElementT: null,
+            ballPosDis: 0,
+            hoverBall: false,
+            hoverBallDis: 0,
+            hoverBg: false,
+            hoverBgDis: 0,
+            drag: false,
+            focused: false,
+            min: null,
+            max: null,
+            invert: null,
+            index: null
+        }]
+    }));
+
+    pulsusPlus.modSlider = function(name, x, y, min, max, invertSlider, index) {
+        const vw = width / 48;
+        const curr = pulsusPlus.sMenu.modSliders[name];
+        if(curr.min === null) {
+            curr.min = min;
+            curr.max = max;
+            curr.ballPosDis = game.mods[name];
+            curr.invert = invertSlider;
+            curr.index = index;
+            if(index === 0) curr.focused = true;
+        };
+        curr.ballPosDis += ease(game.mods[name], curr.ballPosDis, .4);
+        const progress = (curr.ballPosDis - curr.min) / (curr.max - curr.min);
+        let hoverElement = pulsusPlus.modsHitbox("rcorner", matrix.get().x + x - vw*8, matrix.get().y - vw, vw*16, vw*3);
+        if(curr.hoverElementT === null && hoverElement) {
+            curr.hoverElementT = millis();
+        } else if(curr.hoverElementT !== null && !hoverElement) {
+            curr.hoverElementT = null;
+        };
+        curr.hoverBallDis += ease((curr.hoverBall || curr.drag ? .6 : 0) + (curr.drag ? .4 : 0), curr.hoverBallDis, .2);
+        curr.hoverBgDis += ease((curr.hoverBg && !curr.hoverBall ? 1 : 0), curr.hoverBgDis, .2);
+        push();
+        textAlign(CENTER);
+        textSize(vw);
+        fill(theme.text);
+        translate(x, y);
+        colorMode(RGB);
+        text(lang("mods_" + name, langSel), 0, -vw/2);
+        translate(0, vw);
+        rectMode(CENTER);
+        fill(255);
+        if(curr.focused) {
+            strokeWeight(vw/12);
+            stroke(theme.select);
+        } else {
+            noStroke();
+        }
+        rect(0, 0, vw*14, vw/5 + (curr.hoverBgDis * vw/10), vw/8);
+        curr.hoverBg = pulsusPlus.modsHitbox("rcenter", matrix.get().x, matrix.get().y, vw*14, vw/5 + vw*1.5) && !curr.drag;
+        fill(lerpColor(theme.buttonDown, theme.buttonUp, curr.hoverBallDis));
+        translate(vw*7 * (progress*2 - 1), 0);
+        angleMode(DEGREES);
+        rotate(742.5 * progress);
+        scale(1 + (.2 * curr.hoverBallDis));
+        rect(0, 0, vw/1.15, vw/1.15, vw/8);
+        curr.hoverBall = pulsusPlus.modsHitbox("rcenter", matrix.get().x, matrix.get().y, vw/2 + vw/1.15 * (1 + (.2 * curr.hoverBallDis)), vw/2 + vw/1.15 * (1 + (.2 * curr.hoverBallDis)));
+        rotate(-742.5 * progress);
+        noStroke();
+        textSize(vw/2);
+        const modValue = lang("mods_multiplier", langSel, round(game.mods[name], 2));
+        rect(0, 0, textWidth(modValue) + vw/8, textLeading(), vw/8);
+        fill(theme.text);
+        text(modValue, 0, -vw/1.25/2/2);
+        pop();
+        if(curr.hoverElementT !== null) {
+            if(millis() - curr.hoverElementT >= 750) {
+                pulsusPlus.sMenu.currToolTip = name;
+            }
+        }
+    };
+
+    pulsusPlus.sMenu.practiceSliders = Object.fromEntries(["startPos", "endPos"].map(x => {
+        return [x, {
+            ballPosDis: 0,
+            hoverBall: false,
+            hoverBallDis: 0,
+            hoverBg: false,
+            hoverBgDis: 0,
+            drag: false,
+            focused: false,
+            min: null,
+            max: null,
+            index: null
+        }]
+    }));
+
+    pulsusPlus.practiceSlider = function(name, x, y, index) {
+        const vw = width / 48;
+        const curr = pulsusPlus.sMenu.practiceSliders[name];
+        if(curr.min === null) {
+            curr.min = 0;
+            curr.max = pulsusPlus.game.lvlDuration;
+            curr.ballPosDis = game.mods[name];
+            curr.index = index;
+            if(index === 0) curr.focused = true;
+        };
+        curr.ballPosDis += ease(game.mods[name], curr.ballPosDis, .4);
+        const progress = (curr.ballPosDis - curr.min) / (curr.max - curr.min);
+        curr.hoverBallDis += ease((curr.hoverBall || curr.drag ? .6 : 0) + (curr.drag ? .4 : 0), curr.hoverBallDis, .2);
+        curr.hoverBgDis += ease((curr.hoverBg && !curr.hoverBall ? 1 : 0), curr.hoverBgDis, .2);
+        push();
+        textAlign(CENTER);
+        textSize(vw);
+        fill(theme.text);
+        translate(x, y);
+        colorMode(RGB);
+        text(lang("mods_" + name, langSel), 0, -vw/2);
+        translate(0, vw);
+        rectMode(CENTER);
+        fill(255);
+        if(curr.focused) {
+            strokeWeight(vw/12);
+            stroke(theme.select);
+        } else {
+            noStroke();
+        }
+        rect(0, 0, vw*24, vw/5 + (curr.hoverBgDis * vw/10), vw/8);
+        curr.hoverBg = pulsusPlus.modsHitbox("rcenter", matrix.get().x, matrix.get().y, vw*24, vw/5 + vw*1.5) && !curr.drag;
+        fill(lerpColor(theme.buttonDown, theme.buttonUp, curr.hoverBallDis));
+        translate(vw*12 * (progress*2 - 1), 0);
+        angleMode(DEGREES);
+        rotate(742.5 * progress);
+        scale(1 + (.2 * curr.hoverBallDis));
+        rect(0, 0, vw/1.15, vw/1.15, vw/8);
+        curr.hoverBall = pulsusPlus.modsHitbox("rcenter", matrix.get().x, matrix.get().y, vw/2 + vw/1.15 * (1 + (.2 * curr.hoverBallDis)), vw/2 + vw/1.15 * (1 + (.2 * curr.hoverBallDis)));
+        rotate(-742.5 * progress);
+        noStroke();
+        textSize(vw/2);
+        const modValue = formatTime(game.mods[name], "min:sec");
+        rect(0, 0, textWidth(modValue) + vw/8, textLeading(), vw/8);
+        fill(theme.text);
+        text(modValue, 0, -vw/1.25/2/2);
+        pop();
+    };
+
+    pulsusPlus.practiceSetup = function(x, y, w) {
+        // pulsusPlus.sMenu.practiceDisabled
+        // pulsusPlus.sMenu.practiceSections
+        // pulsusPlus.sMenu.end/startPos
+        const vw = width / 48;
+        const vh = height/48;
+        const containerHeight = height-height/8-height/24+vh - height/6;
+        push();
+        translate(0, height * (pulsusPlus.sMenu.practiceYDis - 1));
+        colorMode(RGB);
+        fill(0, 200);
+        rectMode(CORNER);
+        noStroke();
+        rect(0, 0, width, height);
+        textAlign(CENTER, TOP);
+        textStyle(BOLD);
+        fill(theme.text);
+        textSize(width/24);
+        text("Practice Setup", width/2, height/32);
+        
+        // height/12 vert
+        translate(0, height/8);
+        translate(vw, 0);
+        fill(theme.main);
+        rectMode(CORNER);
+        rect(0, -vh, width/3, height-height/8-height/24+vh, vw/1.5);
+        fill(theme.shade);
+        rect(vw/1.5, height/12-vh, width/3-vw/.75, containerHeight);
+        pulsusPlus.sMenu.practiceHover = pulsusPlus.modsHitbox("rcorner", matrix.get().x + vw/1.5, matrix.get().y + height/12-vh, width/3-vw/.75, containerHeight)
+        if(pulsusPlus.sMenu.practiceDisabled) {
+            textSize(height/40);
+            textStyle(ITALIC);
+            fill(200)
+            text("Select a map to set up practice!", width/6, height/12);
+        } else {
+            if(pulsusPlus.sMenu.practiceSections.length === 0) {
+                push();
+                textSize(height/40);
+                textStyle(ITALIC);
+                fill(200)
+                text("This map has no sections!", width/6, height/12);
+                pop();
+            } else {
+                push();
+                translate(vw/1.5, height/12-vh)
+                let scroll = pulsusPlus.sMenu.practiceScrollDis;
+                pulsusPlus.sMenu.practiceScrollDis += ease(pulsusPlus.sMenu.practiceScroll, pulsusPlus.sMenu.practiceScrollDis, .35)
+                if(pulsusPlus.sMenu.practiceScrollMax > 0) {
+                    push();
+                    const scrollProgress = scroll/pulsusPlus.sMenu.practiceScrollMax;
+                    const factor = Math.min(pulsusPlus.sMenu.practiceScrollMax, 32);
+                    const scrollHeight = containerHeight - (factor * (containerHeight/32 + height/24/32));
+                    fill(theme.scrollbar);
+                    if(pulsusPlus.sMenu.practiceScrollMax > 32) {
+                        rect(width/3-vw/.75/2, -scrollHeight + (containerHeight + scrollHeight) * scrollProgress, vw/3, scrollHeight);
+                    } else {
+                        rect(width/3-vw/.75/2, (containerHeight - scrollHeight) * scrollProgress, vw/3, scrollHeight);
+                    }
+                    pop();
+                }
+                
+                for(let i = 0; i < pulsusPlus.sMenu.practiceSections.length; i++) {
+                    const hover = pulsusPlus.modsHitbox("rcorner", matrix.get().x, matrix.get().y + height/12 * (i - scroll), width/3-vw/.75, height/12);
+                    pulsusPlus.sMenu.practiceBtnHover[i][0] = hover ? i : -1;
+                    pulsusPlus.sMenu.practiceBtnHover[i][1] += ease(pulsusPlus.sMenu.practiceSelected === i ? 1 : hover ? .4 : 0, pulsusPlus.sMenu.practiceBtnHover[i][1], .25);
+                    if(height/12 * (i - scroll) >= containerHeight || height/12 * (i - scroll) <= -height/12) continue;
+                    push();
+                    const section = pulsusPlus.sMenu.practiceSections[i];
+                    translate(0, height/12 * (i - scroll));
+                    fill(lerpColor(lerpColor(i%2 === 0 ? theme.shade : theme.overlayShade, color(0,0,0), .15), theme.select, pulsusPlus.sMenu.practiceBtnHover[i][1]));
+                    rect(0, 0, width/3-vw/.75, height/12);
+                    textStyle(NORMAL);
+                    fill(theme.text);
+                    textSize(height/48);
+                    textAlign(CENTER, CENTER);
+                    fitText(section.name, width/6-vw/1.5, height/24, width/4, height/24)
+                    textSize(height/48/1.5);
+                    textStyle(ITALIC);
+                    fill(lerpColor(theme.text, color(0,0,0,0), .35));
+                    textAlign(LEFT, TOP);
+                    text("Section " + (i + 1), vw/4, vh/4);
+                    textAlign(RIGHT, TOP);
+                    text("Time: " + formatTime(round(section.time), "min:sec"), width/3-vw/.75 - vw/4, vw/4);
+                    pop();
+                }
+                fill(theme.main);
+                rect(0, -height/12, width/3 - 2*vw/1.5, height/12);
+                rect(0, containerHeight, width/3 - 2*vw/1.5, height/12);
+                pop();
+            }
+        }
+        fill(theme.text);
+        textSize(height/20);
+        textStyle(BOLD);
+        text("Sections", width/6, 0);
+        translate(vw/2 + width/3 + vw*11/2, 0);
+
+        pulsusPlus.modMenuButton(5, gameScreen === "game" && pulsusPlus.sMenu.practiceUsed ? "Retry" : "Close", width - matrix.get().x - vw - vw*11/2, vw*3/2 + 2 * (vw*3 + vh/2), vw*11, vw*3, () => {
+            if(gameScreen === "game" && pulsusPlus.sMenu.practiceUsed) {
+                pauseAction("retry");
+            }
+            pulsusPlus.sMenu.practice = false;
+            pulsusPlus.sMenu.practiceY = 0;
+        });
+        
+        if(pulsusPlus.sMenu.practiceDisabled) {
+            pop();
+            return;
+        }
+
+        push();
+        translate(-matrix.get().x + width/3 + vw + vw/2, vw*3/2 + 3 * (vw*3 + vh/2))
+        pulsusPlus.practiceSlider("startPos", (width - matrix.get().x)/2, 0, 0);
+        pulsusPlus.practiceSlider("endPos", (width - matrix.get().x)/2, vw*3 + vh/2, 1);
+        pop();
+
+        pulsusPlus.modMenuButton(2, "Set Start", 0, vw*3/2, vw*11, vw*3, () => {
+            pulsusPlus.sMenu.practiceStart = [0, pulsusPlus.sMenu.practiceSelected];
+            game.mods.startPos = pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceSelected].time;
+            pulsusPlus.sMenu.practiceUsed = true;
+        }, pulsusPlus.sMenu.practiceSelected === -1 || (pulsusPlus.sMenu.practiceSelected === pulsusPlus.sMenu.practiceEnd[1] && pulsusPlus.sMenu.practiceEnd[0] === 0));
+        pulsusPlus.modMenuButton(3, "Set End", 0, vw*3/2 + vw*3 + vh/2, vw*11, vw*3, () => {
+            pulsusPlus.sMenu.practiceEnd = [0, pulsusPlus.sMenu.practiceSelected];
+            game.mods.endPos = pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceSelected].time;
+            pulsusPlus.sMenu.practiceUsed = true;
+        }, pulsusPlus.sMenu.practiceSelected === -1  || pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceSelected]?.time === 0 || (pulsusPlus.sMenu.practiceSelected === pulsusPlus.sMenu.practiceStart[1] && pulsusPlus.sMenu.practiceStart[0] === 0));
+        pulsusPlus.modMenuButton(4, "Reset", 0, vw*3/2 + 2 * (vw*3 + vh/2), vw*11, vw*3, () => {
+            pulsusPlus.sMenu.practiceStart = [1, 0];
+            pulsusPlus.sMenu.practiceEnd = [1, pulsusPlus.game.lvlDuration];
+            game.mods.startPos = 0;
+            game.mods.endPos = pulsusPlus.game.lvlDuration;
+            pulsusPlus.sMenu.practiceUsed = true;
+        });
+
+        translate(vw/2 + vw*11/2, 0);
+        textSize(height/24);
+        textStyle(NORMAL);
+        textAlign(LEFT, TOP);
+        const startMode = pulsusPlus.sMenu.practiceStart[0];
+        const startValue = pulsusPlus.sMenu.practiceStart[1];
+        fitText(`From: ${
+            startMode === 0 ? pulsusPlus.sMenu.practiceSections[startValue].name : (
+                formatTime(startValue, "min:sec") + (startValue === 0 ? " (Start)" : "")
+            )
+        }`, 0, 0, width-matrix.get().x - vw, vw*3/2);
+        translate(0, vw*2);
+        const endMode = pulsusPlus.sMenu.practiceEnd[0];
+        const endValue = pulsusPlus.sMenu.practiceEnd[1];
+        fitText(`To: ${
+            endMode === 0 ? pulsusPlus.sMenu.practiceSections[endValue].name : (
+                formatTime(endValue, "min:sec") + (endValue === pulsusPlus.game.lvlDuration ? " (End)" : "")
+            )
+        }`, 0, 0, width-matrix.get().x - vw, vw*3/2);
+        pop();
+    };
+
+    pulsusPlus.modMenuBtns = [];
+
+    pulsusPlus.modMenuButton = function(index, name, x, y, w, h, action, disabled) {
+        if(typeof pulsusPlus.modMenuBtns[index] === "undefined") {
+            pulsusPlus.modMenuBtns[index] = {
+                hover: false,
+                hoverDis: 0,
+                pressed: false,
+                pressedDis: 0,
+                disabledDis: 0,
+                action: action
+            }
+        };
+        const btn = pulsusPlus.modMenuBtns[index];
+        if(!btn.hover && btn.pressed) {
+            btn.pressed = false;
+        };
+        btn.hoverDis += ease(btn.hover ? .2 : 0, btn.hoverDis, .2);
+        btn.pressedDis += ease(btn.pressed ? .4 : 0, btn.pressedDis, .2);
+        btn.disabledDis += ease(disabled ? .5 : 0, btn.disabledDis, .2);
+        const scaleProg = btn.hoverDis + btn.pressedDis;
+        push();
+        translate(x, y);
+        btn.hover = !disabled && pulsusPlus.modsHitbox("rcenter", matrix.get().x, matrix.get().y, w + w*.2*scaleProg, h + h*.2*scaleProg);
+        rectMode(CENTER);
+        scale(1 + scaleProg*.2)
+        fill(lerpColor(lerpColor(theme.buttonDown, color(0,0,0), btn.disabledDis), theme.buttonUp, scaleProg));
+        rect(0, 0, w, h, width/128 * scaleProg);
+        textAlign(CENTER, CENTER);
+        fill(lerpColor(theme.text, color(0,0,0), btn.disabledDis));
+        textSize(width/48/12);
+        textStyle(NORMAL);
+        fitText(name, 0, 0, w/1.25, h/1.5);
+        pop();
+    }
+
+    pulsusPlus.sMenu.modsS = ["noEffects", "noFail", "noRelease", "hidden", "instantFail", "flashlight", "auto", "mirror", "random"];
+
+    pulsusPlus.resetMods = function() {
+        for(i in game.mods) {
+            if(i !== "offset" && !i.match(/(start|end)pos/gi)) {
+                game.mods[i] = game.modsDef[i];
+            }
+        }
+    };
+
+    pulsusPlus.modMenu = function() {
+        const vw = width / 48;
+        push();
+        translate(0, height * (pulsusPlus.sMenu.modsYDis - 1));
+        rectMode(CORNER);
+        colorMode(RGB);
+        fill(0, 200);
+        noStroke();
+        rect(0, 0, width, height);
+        textAlign(CENTER, TOP);
+        textStyle(BOLD);
+        fill(theme.text);
+        textSize(width/24);
+        text("Mods", width/2, height/32);
+        translate(2*vw, height/6);
+        fill(0, 175);
+        rect(-vw, -vw, vw*13, vw*15.5, vw);
+        rect((width/2)-vw*8 - 2*vw, -vw, vw*16, vw*3*3, vw);
+        rect(width-vw*14 - 2*vw, -vw, vw*13, vw*3*3 + vw*3.5, vw);
+        for(i in pulsusPlus.sMenu.modsS) {
+            pulsusPlus.modButton(pulsusPlus.sMenu.modsS[i], vw*4*(i%3), vw*4*(Math.floor(i/3)));
+        };
+        translate(-vw/2, vw*12.5);
+        textSize(vw);
+        textStyle(NORMAL);
+        fill(255);
+        fitText(lang("mods_scoreMultiplier", langSel, calcScoreMulti(Object.fromEntries(Object.entries(game.mods).map(m => {if(m[0].match(/(start|end)pos/gi)) {return [m[0], 0]} else {return m}})))), vw*6, 0, vw*12, width/32);
+        translate(-matrix.get().x + width/2, -matrix.get().y + height/6 + height * (pulsusPlus.sMenu.modsYDis - 1));
+        pulsusPlus.modSlider("bpm", 0, 0, .5, 2, false, 0);
+        pulsusPlus.modSlider("foresight", 0, vw*3, 2, .25, true, 1);
+        pulsusPlus.modSlider("hitWindow", 0, vw*6, 2, .25, true, 2);
+        translate(-matrix.get().x + width-vw*14, -matrix.get().y + height/6 + height * (pulsusPlus.sMenu.modsYDis - 1));
+        pulsusPlus.modMenuButton(0, "Reset Mods", vw*11/2+vw, vw*3/2, vw*11, vw*3, pulsusPlus.resetMods);
+        pulsusPlus.modMenuButton(1, "Practice Setup", vw*11/2+vw, vw*3.5 + vw*3/2, vw*11, vw*3, () => {pulsusPlus.sMenu.mods = false; pulsusPlus.sMenu.modsY = 0; pulsusPlus.sMenu.practice = true; pulsusPlus.sMenu.practiceY = 1});
+        pulsusPlus.modMenuButton(2, "Close", vw*11/2+vw, vw*7 + vw*3/2, vw*11, vw*3, () => {pulsusPlus.sMenu.mods = false; pulsusPlus.sMenu.modsY = 0});
+
+        if(pulsusPlus.sMenu.currToolTip !== null) {
+            push();
+            textSize(vw/2);
+            translate(mouseX -matrix.get().x + vw/2, mouseY - matrix.get().y + vw/4 - (vw + textLeading()));
+            rectMode(CORNER);
+            colorMode(RGB);
+            fill(0, 175);
+            rect(0, -vw/4, textWidth(lang("mods_" + pulsusPlus.sMenu.currToolTip + "_sub", langSel)) + vw, vw + textLeading(), vw/4);
+            textAlign(LEFT);
+            fill(255);
+            textStyle(NORMAL);
+            text(`${lang("mods_" + pulsusPlus.sMenu.currToolTip, langSel)}\n${lang("mods_" + pulsusPlus.sMenu.currToolTip + "_sub", langSel)}`, vw/2, 0)
+            pop();
+        }
+        pop();
+    }
+
+    pulsusPlus.renderExtraMenus = function() {
+        pulsusPlus.sMenu.modsYDis += ease(pulsusPlus.sMenu.modsY, pulsusPlus.sMenu.modsYDis, .1);
+        pulsusPlus.sMenu.practiceYDis += ease(pulsusPlus.sMenu.practiceY, pulsusPlus.sMenu.practiceYDis, .1);
+        if(pulsusPlus.sMenu.modsYDis >= 1e-3) {
+            pulsusPlus.modMenu();
+        }
+        if(pulsusPlus.sMenu.practiceYDis >= 1e-3) {
+            pulsusPlus.practiceSetup();
+        }
+    };
+
+    pulsusPlus.calculateScore = function(type, resultsScreen) {
+        let score = 0;
+        switch(type) {
+            case "pulsus":
+                return resultsScreen ? game.scoreFinal * calcScoreMulti(game.mods, true) : game.scoreDis;
+            case "PSC":
+                const marvs = game.hitStats[0];
+                const greats = game.hitStats[1];
+                const goods = game.hitStats[2];
+                const oks = game.hitStats[3];
+                const misses = game.hitStats[4];
+                const offTimes = goods + oks;
+    
+                const calcAcc = (marvs + .975*greats + .5*goods + .1*oks)/game.beat.length;
+                const inpScore = 1e6 * Math.pow(1 - (misses + .25*offTimes)/game.beat.length, .5*misses);
+                const accScore = 1e6 * Math.pow(calcAcc, 3);
+                score = .75*accScore + .25*inpScore;
+                break;
+            case "korean":
+    
+                break;
+        };
+        pulsusPlus.game.score += ease(score, pulsusPlus.game.score, .35);
+        return pulsusPlus.game.score;
+    }
+
+    formatTime = function(timeMs, format) {
+        const removeMillis = format === "min:sec"
+        const time = timeMs/1000;
+        let absTime = Math.abs(time);
+        const min = Math.floor(absTime/60);
+        const sec = (absTime%60 < 10 ? "0" : "") + (absTime%60).toFixed(3);
+        return `${round(time, 6) < 0 ? "-" : ""}${min}:${removeMillis ? sec.replace(/\.(.{3})/, "") : sec}`;
+    };
 
     // icon
     img.pulsusPlus = loadImage(pulsusPlus.fromExtension("static/icons/game-512.png"));
@@ -1289,12 +2054,30 @@ function completeSetup() {
             window.dispatchEvent(new CustomEvent('SetupComplete'));
         }
     );
+    Object.keys(langs).forEach(key => {
+        langs[key]["edit_hint_keybinds_array"] = [];
+    })
 
     // sounds
     lowLag.load(pulsusPlus.fromExtension("static/sound/scroll.wav"), "scroll");
     lowLag.load(pulsusPlus.fromExtension("static/sound/load.wav"), "load");
     lowLag.load(pulsusPlus.fromExtension("static/sound/retry.wav"), "retry");
     lowLag.load(pulsusPlus.fromExtension("static/sound/skip.wav"), "skip");
+    lowLag.load(pulsusPlus.fromExtension("static/sound/shutter.mp3"), "shutter");
+
+    // version check
+
+    fetch(pulsusPlus.fromExtension("manifest.json"))
+    .then(data => data.json())
+    .then(response => {
+        fetch("https://raw.githubusercontent.com/nullieee/PulsusPlus/refs/heads/master/manifest.json")
+        .then(d => d.json())
+        .then(r => {
+            if(r.version !== response.version || pulsusPlus.dev) {
+                pulsusPlus.updateNotice = true;
+            };
+        })
+    })
 };
 if(typeof mousePressed === "undefined") function mousePressed(){};
 if(typeof mouseDragged === "undefined") function mouseDragged(){};
@@ -1319,8 +2102,9 @@ window.addEventListener("SetupComplete", function() {
     }, 2000);
     const mmBuffer = musicManager;
     const cmsBuffer = clickMenu.screens;
-    const pp = "data:image/jpeg;base64,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";
     eval(`
+        addSection = ${pulsusPlus.functionReplace(addSection, /offset:.*?\.timelineOffset/, "offset:pulsusPlus.convertTime(game.time*1e3)")
+        }
         adjustCanvas = ${pulsusPlus.functionReplace(adjustCanvas, "end", `
             if(pulsusPlus.resolutionBuffer !== pulsusPlus.settings.resolution) {
                 pulsusPlus.resolutionBuffer = pulsusPlus.settings.resolution;
@@ -1353,6 +2137,16 @@ window.addEventListener("SetupComplete", function() {
         clickMenu.screens = ${pulsusPlus.functionReplace(clickMenu.screens, /\.5===(.{1,2})\.playbackRate/, "true")
             .replace(/playingOffset=(.{1,2})\.time/, "playingOffset = game.time, pulsusPlus.playbackRate = game.playbackRate")
             .replace(/\((.{1,2})\(String/, "(pulsusPlus.shiftKey ? createLevel(clevels[menu.song.sel]) : copyToClipboard(String")
+            .replace(/"(objType|editMode|holdLength|clickMode|timelineSnap)"/g, `"$1", true`)
+            .replace(/modsDef\[t\]/, "modsDef[t], game.mods.endPos = pulsusPlus.game.lvlDuration, pulsusPlus.sMenu.practiceStart = [1, 0], pulsusPlus.sMenu.practiceEnd = [1, pulsusPlus.game.lvlDuration]")
+            .replace(/,(.{1,2})\.lvl\.showMods=!(.{1,2})\.lvl\.showMods/g, `,(() => {
+                if(pulsusPlus.settings.mpMode) {
+                    pulsusPlus.sMenu.mods = !pulsusPlus.sMenu.mods;
+                    pulsusPlus.sMenu.modsY = pulsusPlus.sMenu.mods ? 1 : 0;
+                } else {
+                    menu.lvl.showMods = !menu.lvl.showMods; 
+                }
+            })()`)
         };
         Object.keys(cmsBuffer).forEach(key => {
             clickMenu.screens[key] = cmsBuffer[key];
@@ -1367,7 +2161,7 @@ window.addEventListener("SetupComplete", function() {
             };
         `)};
         createLevel = ${pulsusPlus.functionReplace(createLevel, `New Map",`, `New Map",
-            levels.saved[levels.saved.length - 1].bg = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+            levels.saved[levels.saved.length - 1].bg = pulsusPlus.backgrounds[pulsusPlus.settings.defaultBg],
             `, ["songID"])
             .replace(".sections=[]", `.sections=(pulsusPlus.settings.timingPoints ? [{
                     time: 0,
@@ -1384,10 +2178,14 @@ window.addEventListener("SetupComplete", function() {
             .replace("ar=2", "ar=1")
             .replace("hw=2", "hw=1")
         };
-        cycleSnap = ${pulsusPlus.functionReplace(cycleSnap, "=.25))", "= .25 : game.snap = .25); pulsusPlus.snap = game.snap;")
+        cycleSnap = ${pulsusPlus.functionReplace(cycleSnap, "start", `
+            if(e.search(/objType|editMode|holdLength|clickMode|timelineSnap/) !== -1 && override !== true) return;
+            `, ["override"])
+            .replace("=.25))", "= .25 : game.snap = .25); pulsusPlus.snap = game.snap;")
             .replace(/&&\((.{1,2})\.snap/, "? game.snap")
         };
         drawDifficultyCircle = ${pulsusPlus.functionReplace(drawDifficultyCircle, /\)\.draw\(/, `,gaySex).draw(`, ["gaySex"])};
+        drawDiscord = ${pulsusPlus.functionReplace(drawDiscord, /modsDef\[d\]/, "modsDef[d] && !d.match(/pos/gi)")}
         drawProfile = ${pulsusPlus.functionReplace(drawProfile, /"id"\)\.special\)/g, `"id").special, newGrabUser(newGrabLevelMeta(clevels[t], "id").author, "uuid").user)`)}
         drawScreens = ${pulsusPlus.functionReplace(drawScreens, /"vsync"/s, `
             pulsusPlus.windowTheme = pulsusPlus.settings.themeSel === -1 ? pulsusPlus.themes[theme.lightTheme ? 1 : 0].values : pulsusPlus.themes[pulsusPlus.settings.themeSel].values;
@@ -1395,6 +2193,75 @@ window.addEventListener("SetupComplete", function() {
             if(pulsusPlus.printer) {
                 pulsusPlus.setPrinterOnFire();
             };
+            const vmax = width > height ? width / 64 / 1.25 : height / 64 / 1.25;
+            pulsusPlus.renderExtraMenus();
+            if(pulsusPlus.printing !== false || Timeout.pending("printEnd")) {
+                const vmax = width > height ? width / 64 / 1.25 : height / 64 / 1.25;
+                push();
+                drawingContext.globalAlpha = pulsusPlus.printing === false ? Timeout.remaining("printEnd")/250 : Math.min((millis() - pulsusPlus.printing)/250, 1)
+                push();
+                rectMode(CENTER);
+                colorMode(RGB);
+                stroke(255);
+                strokeWeight(vmax/6);
+                translate(vmax*4, height-vmax*4);
+                rotate(22.5 + sin((millis()/1000/2)%1*90) * 360);
+                fill(0, 125, 205);
+                rect(0, 0, vmax*4);
+                rotate(-22.5 + cos((millis()/1000/2)%1*90) * 360);
+                fill(0, 175, 255);
+                rect(0, 0, vmax*4);
+                pop();
+                push();
+                textAlign(CENTER, BOTTOM);
+                textSize(vmax*5);
+                fill(255);
+                noStroke();
+                for(let i = 0; i<3; i++) {
+                    text(".", vmax*4 + ((i-1) * textWidth(".")), height-vmax*3.75 + sin(i*30 + millis()/1000 * 360) * vmax*.5);
+                }
+                pop();
+                pop();
+            };
+            pulsusPlus.masterVolumeDis += ease(pulsusPlus.settings.masterVolume, pulsusPlus.masterVolumeDis, .25)
+            if(Timeout.pending("volFadeIn") || Timeout.pending("volRing")) {
+                push();
+                const fadingIn = Timeout.pending("volFadeIn");
+                if(fadingIn) {
+                    drawingContext.globalAlpha = (100 - Timeout.remaining("volFadeIn"))/100;
+                };
+                const fadingOut = Timeout.remaining("volRing") <= 150;
+                if(fadingOut) {
+                    drawingContext.globalAlpha = Timeout.remaining("volRing")/150
+                };
+                stroke(theme.buttonDown);
+                strokeWeight(vmax * .75);
+                colorMode(RGB);
+                fill(0, 0, 0, 100);
+                ellipseMode(CORNER);
+                ellipse(width-vmax*9.5, height-vmax*9.5, vmax*8);
+                stroke(theme.buttonUp);
+                angleMode(DEGREES);
+                noFill();
+                arc(width-vmax*9.5, height-vmax*9.5, vmax*8, vmax*8, -90, Math.max(-89, (360*pulsusPlus.masterVolumeDis/100) - 90));
+                textSize(vmax*1.5);
+                textAlign(CENTER, CENTER);
+                fill(theme.text);
+                noStroke();
+                text(round(pulsusPlus.settings.masterVolume) + "%", width-vmax*9.5 + vmax*4, height-vmax*9.5 + vmax*4);
+                textSize(vmax);
+                text("Master Volume", width-vmax*9.5 + vmax*4, height-vmax*9.5 - vmax*1.5);
+                pop();
+            };
+            if(pulsusPlus.updateNotice && gameScreen === "click") {
+                push();
+                fill(255);
+                noStroke();
+                textSize(width/48);
+                textStyle(BOLD);
+                text("It seems you are running an outdated/pre-release version of PulsusPlus.\\ndo NOT report any bugs! We only take in bugs from the latest distribution build of the extension.", width/2, 9/16 * 2 * width/12/1.5);
+                pop();
+            }
             "vsync"
             `)
             .replace(/"game"!==.*?-a\),pop\(\)\),/, `
@@ -1410,13 +2277,14 @@ window.addEventListener("SetupComplete", function() {
             .replace(/\?\((.{1,2})\.loaded=!0/, "&& pulsusPlus.game.loaded ? (game.loaded = true")
         };
         getKey = ${pulsusPlus.functionReplace(getKey, "start", `if(e === "Enter") return "\\n";`)}
+        getMods = ${pulsusPlus.functionReplace(getMods, /0!==e\.endPos/, "0!==e.endPos && pulsusPlus.game.lvlDuration !== e.endPos")};
         getScroll = ${pulsusPlus.functionReplace(getScroll, "start", `
-            if(PulsusPlusWindow.allInstances.some(instance => instance.states.visible && hitbox(instance.z + "rcorner", instance.properties[0], instance.properties[1], instance.properties[2], instance.heightFixed/16 + Math.max(0, instance.menuHeight/1.25 - instance.heightFixed/32)) || instance.states.dragging || instance.menu.data.dropdownHitbox)) {
+            if(pulsusPlus.sMenu.mods || pulsusPlus.sMenu.practice || pulsusPlus.altKey || PulsusPlusWindow.allInstances.some(instance => instance.states.visible && hitbox(instance.z + "rcorner", instance.properties[0], instance.properties[1], instance.properties[2], instance.heightFixed/16 + Math.max(0, instance.menuHeight/1.25 - instance.heightFixed/32)) || instance.states.dragging || instance.menu.data.dropdownHitbox)) {
                 return false;
             };
-        `)};
+        `, ["mods"])};
         hitbox = ${pulsusPlus.functionReplace(hitbox, "start", `
-            if(drawingContext.globalAlpha <= .05 || pulsusPlus.printer || PulsusPlusWindow.allInstances.some(instance => instance.states.dragging)) return false;
+            if(pulsusPlus.sMenu.mods || pulsusPlus.sMenu.practice || drawingContext.globalAlpha <= .05 || pulsusPlus.printer || PulsusPlusWindow.allInstances.some(instance => instance.states.dragging)) return false;
             if(typeof testHitbox === "undefined") {
                 if(isNaN(parseInt(e[0]))) {
                     e = "0" + e;
@@ -1427,22 +2295,38 @@ window.addEventListener("SetupComplete", function() {
                 e = e.substring(1);
             }
         `, ["testHitbox"])};
+        pulsusPlus.modsHitbox = ${pulsusPlus.functionReplace(hitbox, "pulsusPlus.sMenu.mods", "false")};
         Howl.prototype.volume = ${pulsusPlus.functionReplace(Howl.prototype.volume, /(vol =|vol=)/, "vol = (pulsusPlus.settings.masterVolume/100) *")}
         loadLevel = ${pulsusPlus.functionReplace(loadLevel, "start", `
         `)
             .replace("lvl.loading=!0)", `lvl.loading=!0)
-            pulsusPlus.game.loaded = false
-            if(Math.abs(pulsusPlus.game.lvlDuration - game.mods.endPos) <= 1500) {
-                game.mods.endPos = 0;
-            };
+            pulsusPlus.game.loaded = false;
+            pulsusPlus.sMenu.mods = false;
+            pulsusPlus.sMenu.practice = false;
+            if(Math.abs(getSelectedLevel().len - game.mods.endPos) < 1000) {
+                game.mods.endPos = getSelectedLevel().len;
+            }
+            if(game.edit) {
+                pulsusPlus.sMenu.practiceSelected = -1;
+                pulsusPlus.sMenu.practiceStart = [1, 0];
+                pulsusPlus.sMenu.practiceEnd = [1, pulsusPlus.game.lvlDuration];    
+            } else if(pulsusPlus.sMenu.lastSel === clevels[menu.lvl.sel]) {
+                game.mods.startPos = pulsusPlus.sMenu.practiceStart[0] === 1 ? pulsusPlus.sMenu.practiceStart[1] : pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceStart[1]].time;
+                game.mods.endPos = pulsusPlus.sMenu.practiceEnd[0] === 1 ? pulsusPlus.sMenu.practiceEnd[1] : pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceEnd[1]].time;
+            }
+            pulsusPlus.game.kps = [];
+            pulsusPlus.game.maxKps = 0;
+            pulsusPlus.game.totKps = 0;
             pulsusPlus.resultsScreenAppeared = false;
             pulsusPlus.game.UR = 0;
+            pulsusPlus.sMenu.practiceUsed = false;
             pulsusPlus.game.noteTimes = game.beat.map(beat => beat[1]).sort((a, b) => a - b);
-            pulsusPlus.game.hwUnrounded = (clevels[menu.lvl.sel]?.local ? clevels[menu.lvl.sel].hw : newGrabLevelMeta(clevels[menu.lvl.sel], "id").hw) * game.mods.hitWindow;
+            pulsusPlus.game.hwUnrounded = (clevels[menu.lvl.sel]?.local ? clevels[menu.lvl.sel].hw : (newGrabLevelMeta(clevels[menu.lvl.sel], "id").hw ?? newGrabLevelMeta(clevels[menu.lvl.sel], "id").ar)) * game.mods.hitWindow;
             pulsusPlus.game.hw = round(pulsusPlus.game.hwUnrounded, 2);
             pulsusPlus.game.hwMs = round((pulsusPlus.convertTime(game.hw) * 1e3) * game.hitValues[game.hitValues.length - 2].timing);
             pulsusPlus.game.barProgress = 0;
             pulsusPlus.game.breakProgress = 1;
+            pulsusPlus.game.holding = 0;
             pulsusPlus.thread((noteTimes, gameBeat) => {
                 return noteTimes.map(time => gameBeat.filter(beat => beat[1] === time).map(beat => beat[1] + (beat[5] ? beat[6] : 0)).sort((a, b) => b - a)[0])
             },
@@ -1545,7 +2429,7 @@ window.addEventListener("SetupComplete", function() {
                 pulsusPlus.retryDown = false;
             }
             if(pulsusPlus.retry !== null && !Timeout.pending("retry")) {
-                if(pulsusPlus.settings.retryTime === 0) {
+                if(Math.max(0, pulsusPlus.settings.retryTime) === 0) {
                     pulsusPlus.retryProgress = 1;
                 } else {
                     pulsusPlus.retryProgress = (millis()-pulsusPlus.retry)/pulsusPlus.settings.retryTime;
@@ -1574,8 +2458,8 @@ window.addEventListener("SetupComplete", function() {
         });
         musicManager.field.draw = ${pulsusPlus.functionReplace(musicManager.field.draw, "end", `
             const vmax = width > height ? width / 64 : height / 64;
-            if(game.beat.length !== 0 ? game.beat[game.beat.length - 1][1] - game.time <= 0 : true) return;
-            if(!lvlHowl[game.song].playing() && !game.paused && !game.edit && pulsusPlus.convertTime(game.time) < -2) {
+            if(game.beat.length !== 0 ? (game.beat[game.beat.length - 1][1] - game.time <= 0) : true) return;
+            if(!lvlHowl[game.song].playing() && !game.paused && !game.edit && game.time - game.beat[0][1] < -pulsusPlus.convertTime(2, "pulsus")) {
                 push();
                 fill(0, 200);
                 noStroke();
@@ -1600,6 +2484,9 @@ window.addEventListener("SetupComplete", function() {
             const nextNoteTime = pulsusPlus.game.noteTimes.filter(t => t > game.time)[0];
             const untilNext = pulsusPlus.convertTime(nextNoteTime - Math.max(0, game.time));
             const spacing = pulsusPlus.convertTime(nextNoteTime - prevNoteEndTime);
+            if(prevNoteEndTime !== prevNoteTime) {
+                pulsusPlus.game.holding = prevNoteEndTime;
+            }
             if((prevNoteEndTime >= game.time && !isStart)) {
                 pulsusPlus.skip = false;
                 pulsusPlus.skipAuto = false;
@@ -1609,12 +2496,12 @@ window.addEventListener("SetupComplete", function() {
             pulsusPlus.game.breakProgress += pulsusPlus.forceEase(breakProgress, pulsusPlus.game.breakProgress, .1);
             let skippable, drawable, progStart, progEnd;
             if(isStart) {
-                skippable = untilNext > 4;
-                drawable = untilNext > 3.5;
+                skippable = untilNext > 4 && game.time >= pulsusPlus.game.holding;
+                drawable = untilNext > 3.5 && game.time >= pulsusPlus.game.holding;
                 progStart = 1;
             } else {
-                skippable = untilNext > 4 && spacing > 8;
-                drawable = untilNext > 3.5 && spacing > 8;
+                skippable = untilNext > 4 && spacing > 8 && game.time >= pulsusPlus.game.holding;
+                drawable = untilNext > 3.5 && spacing > 8 && game.time >= pulsusPlus.game.holding;
                 progStart = constrain(spacing - untilNext, 0, 1);
             };
             progEnd = constrain(untilNext-3.5, 0, .5) / .5;
@@ -1667,6 +2554,7 @@ window.addEventListener("SetupComplete", function() {
                 };
             `)
             .replace(/\!(.{1,2})\.menu&&/, `!game.menu && !PulsusPlusWindow.allInstances.some(instance => instance.states.visible && (hitbox(instance.z + "rcorner", instance.properties[0], instance.properties[1], instance.properties[2], instance.heightFixed/16 + Math.max(0, instance.menuHeight/1.25 - instance.heightFixed/32)) || instance.menu.data.dropdownHitbox)) &&`)
+            .replace(/\((.{1,2})\.scoreDis\)/, "(pulsusPlus.calculateScore(pulsusPlus.settings.scoreSystem))")
             .replace(/,(.{1,2})\.settings\.showScore&&/, `,
                 pulsusPlus.settings.showMods && (
                     textAlign(RIGHT, TOP),
@@ -1697,7 +2585,7 @@ window.addEventListener("SetupComplete", function() {
                     /*millis() - pulsusPlus.game.lastCalc > 100 * Math.max(1, pulsusPlus.game.hitStatsSumReal / 750) && */ pulsusPlus.game.calculatedUR && pulsusPlus.game.hitStatsSum !== pulsusPlus.game.hitStatsSumReal && (
                         pulsusPlus.game.calculatedUR = false,
                         pulsusPlus.thread((gsd, arr) => { return gsd(arr) },
-                            pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => pulsusPlus.convertTime(p[2] * pulsusPlus.game.hwUnrounded * 1e4)))
+                            pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => pulsusPlus.convertTime(p[2] * pulsusPlus.game.hwUnrounded * 1e4 * game.mods.bpm)))
                         ).then(response => {
                             pulsusPlus.game.UR = round(response);
                             pulsusPlus.game.calculatedUR = true;
@@ -1719,11 +2607,32 @@ window.addEventListener("SetupComplete", function() {
                     fill(0, 255/2),
                     translate(width - 3*width/32 - width/128, height - height/16 - 3*width/32 - width/128),
                     square(-width/512/2, -width/512/2, 3*width/32 + width/512),
-                    textAlign(CENTER),
                     noStroke(),
                     fill(255),
+                    push(),
                     textSize(width/64),
-                    text(pulsusPlus.game.kps.length + " KPS", -width/512/2 + (3*width/32 + width/512)/2, -width/512/2 - textLeading()),
+                    translate(0, textLeading() * -pulsusPlus.game.overlayStatsCount),
+                    pulsusPlus.game.overlayStats[0] && (
+                        textAlign(LEFT),
+                        text("KPS", -width/512/2, -width/512/2),
+                        textAlign(RIGHT),
+                        text(pulsusPlus.game.kps.length, -width/512/2 + 3*width/32 + width/512, -width/512/2),
+                        translate(0, textLeading())
+                    ),
+                    pulsusPlus.game.overlayStats[1] && (
+                        textAlign(LEFT),
+                        text("MAX", -width/512/2, -width/512/2),
+                        textAlign(RIGHT),
+                        text(pulsusPlus.game.maxKps, -width/512/2 + 3*width/32 + width/512, -width/512/2) ,
+                        translate(0, textLeading())                   
+                    ),
+                    pulsusPlus.game.overlayStats[2] && (
+                        textAlign(LEFT),
+                        text("TOT", -width/512/2, -width/512/2),
+                        textAlign(RIGHT),
+                        text(pulsusPlus.game.totKps, -width/512/2 + 3*width/32 + width/512, -width/512/2)
+                    ),
+                    pop(),
                     colorMode(RGB),
                     [...Array(9).keys()].forEach(index => {
                         const boxSize = width/32;
@@ -1766,10 +2675,11 @@ window.addEventListener("SetupComplete", function() {
             .replace(/\*(.{1,2})\.timelineOffset,(.{1,2})\.timeScroll/, `*0,game.timeScroll`)
             .replace(/\((.{1,2})\.timelineTickFor.*?ms"\)/, `(
                 (pulsusPlus.settings.timingPoints
-                ? (Math.round(1000 * (pulsusPlus.convertTime(game.time - pulsusPlus.targetSection.time) * pulsusPlus.targetSection.bpm/60)) / 1000).toFixed(3) + " (" + pulsusPlus.targetSection.bpm + "BPM, " + round(pulsusPlus.convertTime(1e3 * pulsusPlus.targetSection.time)) + "ms + " + pulsusPlus.targetSection.offset + "ms)"
+                ? (Math.round(1000 * (pulsusPlus.convertTime(game.time - pulsusPlus.targetSection.time) * pulsusPlus.targetSection.bpm/60)) / 1000).toFixed(3) + " (" + pulsusPlus.targetSection.bpm + "BPM, " + round(pulsusPlus.convertTime(1e3 * pulsusPlus.targetSection.time)) + "ms + " + round(pulsusPlus.targetSection.offset) + "ms)"
                 : game.timelineTickFor(game.time) + " (" + game.timelineBPM + ") (" + lang("milliseconds_short", langSel, game.timelineOffset) + ")")
                 + "\\n" + formatTime(pulsusPlus.convertTime(game.time) * 1e3, "min:sec:ms")
             `)
+            .replace(/0!==(.{1,2})\.mods\.endPos/, "pulsusPlus.game.lvlDuration !== game.mods.endPos")
         };
         musicManager.musicTime = ${pulsusPlus.functionReplace(musicManager.musicTime, "start", ``)
             .replace(/console\.log/g, "(function(){})")
@@ -1783,7 +2693,7 @@ window.addEventListener("SetupComplete", function() {
                 pulsusPlus.game.sectionOverflow = 0;
                 pulsusPlus.game.sectionHitbox = false;
                 pulsusPlus.thread((gsd, arr) => { return gsd(arr) },
-                    pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => pulsusPlus.convertTime(p[2] * pulsusPlus.game.hwUnrounded * 1e4)))
+                    pulsusPlus.getStandardDeviation.toString(), JSON.stringify(game.sectionPerformance.filter(p => p[1] !== 4).map(p => pulsusPlus.convertTime(p[2] * pulsusPlus.game.hwUnrounded * 1e4 * game.mods.bpm)))
                 ).then(response => {
                     pulsusPlus.game.UR = round(response);
                 }),
@@ -1791,15 +2701,21 @@ window.addEventListener("SetupComplete", function() {
                 pulsusPlus.game.lastCalc = millis();
                 pulsusPlus.game.hitStatsSum = game.hitStats.reduce((p, a) => p + a, 0);
                 pulsusPlus.resultsScreenAppeared = true;
+                if(!game.failed) {
+                    pulsusPlus.retryCount = 0;
+                };
+                pulsusPlus.game.kps = [];
+                pulsusPlus.game.maxKps = 0;
+                pulsusPlus.game.totKps = 0;
             }
             if(pulsusPlus.settings.fadeOnEnd) {
-                lvlHowl[game.song].volume(lvlHowl[game.song].volume() + pulsusPlus.forceEase(0, lvlHowl[game.song].volume(), .025));
+                lvlHowl[game.song].volume((lvlHowl[game.song].volume() + pulsusPlus.forceEase(0, lvlHowl[game.song].volume(), .025)) / (pulsusPlus.settings.masterVolume / 100));
             };
             `)
             .replace(/!(.{1,2})\.scoreSubmitted.*?scoreSubmitted=!0\),/, "")
             .replace(/\("loading",(.{1,2})\):"";text\((.*?)\*3\),/, `("loading", langSel):"";`)
             .replace("4),textStyle(NORMAL)", "4),textAlign(LEFT, TOP),textStyle(NORMAL)")
-            .replace("mods))", `mods)) + "\\nM/G: " + pulsusPlus.game.ratio + ", UR: " + pulsusPlus.game.UR`)
+            .replace("mods))", "mods)) + `\\nM/G: ${pulsusPlus.game.ratio}, UR: ${pulsusPlus.game.UR} (${lang('PP_SCORING_' + pulsusPlus.settings.scoreSystem, langSel)})`")
             .replace("+1];", `+1];
                 push();
                 const overflow = Math.max(0, ((1.25*height/32 * game.sections.length) + vmax - height/64 + matrix.get().y) - height);
@@ -1821,7 +2737,10 @@ window.addEventListener("SetupComplete", function() {
                 translate(0, -pulsusPlus.game.sectionScrollDis * (pulsusPlus.game.sectionOverflow + 1) * height/32);
             `)
             .replace(/\*a\+(.{1,2})\)\}/, "*a+vmax); pop()}")
+            .replace(/game_score",(.*?)width/, `game_score", langSel, round(pulsusPlus.calculateScore(pulsusPlus.settings.scoreSystem, true))), width`)
         };
+        musicManager.scanBeats = ${pulsusPlus.functionReplace(musicManager.scanBeats, /(?<!-)..\.hw/gi, "(!pulsusPlus.settings.noteFade && game.edit ? 0 : game.hw)")}
+        musicManager.updateAll = ${pulsusPlus.functionReplace(musicManager.updateAll, /:(.{1,2})\.menu=\!(.{1,2})\.menu/, ":game.menu = (prmptingString.fade <= 1e-6 ? !game.menu : game.menu)")}
         musicManager.updateEditor = ${pulsusPlus.functionReplace(musicManager.updateEditor, /"holdRelease",(.{1,2})\.settings\.hitsoundVolume/, `"holdRelease",pulsusPlus.settings.holdReleaseVolume`)
             .replaceAll("mouseY<height", "!PulsusPlusWindow.allInstances.some(instance => instance.states.dragging) && mouseY < height")
             .replace("edit){", `edit) {
@@ -1846,23 +2765,42 @@ window.addEventListener("SetupComplete", function() {
                     pulsusPlus.targetSection = game.sections.filter(section => section.time <= game.time).sort((a, b) => b.time - a.time)[0] ?? game.sections[0];
                     game.timelineBPM = pulsusPlus.targetSection.bpm;
                     game.timelineOffset = pulsusPlus.targetSection.offset;
+                    if(typeof lvlHowl[game.song] !== "undefined") {
+                        if(round(menu.settings.musicVolume/100 * pulsusPlus.settings.masterVolume/100, 6) !== round(lvlHowl[game.song].volume(), 6)) {
+                            lvlHowl[game.song].volume(menu.settings.musicVolume/100);
+                        }
+                    }
                 };
             `)
             .replace(/timeEnd=.*?,/, `timeEnd = typeof lvlHowl[game.song] === "undefined" ? getLevelDuration() : pulsusPlus.convertTime(lvlHowl[game.song]._duration - game.songOffset/1000, "pulsus"),`)
         }
         musicManager.updateGameplay = ${pulsusPlus.functionReplace(musicManager.updateGameplay, "start", `
-                pulsusPlus.game.kps = pulsusPlus.game.kps.filter(t => millis()-1000 <= t);
+                if(pulsusPlus.settings.showOverlay) {
+                    pulsusPlus.game.kps = pulsusPlus.game.kps.filter(t => millis()-1000 <= t);
+                    if(pulsusPlus.game.kps.length > pulsusPlus.game.maxKps) {
+                        pulsusPlus.game.maxKps = pulsusPlus.game.kps.length;
+                    }
+                    pulsusPlus.game.overlayStats = [pulsusPlus.settings.showOverlayKps, pulsusPlus.settings.showOverlayMax, pulsusPlus.settings.showOverlayTot];
+                    pulsusPlus.game.overlayStatsCount = pulsusPlus.game.overlayStats.filter(x => x).length;
+                }
             `)
             .replace(/noCursor\(\),/, `
                 if(!(PulsusPlusWindow.allInstances.some(x => x.states.visible) || prmptingString.active || prmptingColor.active)) {noCursor()} else {cursor()};
                 if(game.disMode === 1) {lvlHowl[game.song].volume(menu.settings.musicVolume/100 * (1 - pulsusPlus.retryProgress) * (Timeout.pending("skipStart") ? (200 + Timeout.remaining("skipStart"))/400 : 1) * (Timeout.pending("skipEnd") ? (400 - Timeout.remaining("skipEnd"))/400 : 1) )};
         `)};
-        pauseAction = ${pulsusPlus.functionReplace(pauseAction, /case"retry"\:/, `case "retry": pulsusPlus.retryCount++; pulsusPlus.retryCountPos = 0; pulsusPlus.stopRetry = false;`)};
+        pauseAction = ${pulsusPlus.functionReplace(pauseAction, /case"retry"\:/, `case "retry": pulsusPlus.retryCount++; pulsusPlus.retryCountPos = 0; pulsusPlus.stopRetry = false;`)
+            .replace(`case"menu":`, `case "menu":if(millis() - menuLoadDropdown.dropTime <= 500) return;`)
+        };
         popupMessage = ${pulsusPlus.functionReplace(popupMessage, "start", `
             if(e.message.indexOf("PP_ERROR") !== -1 && e.type === "error" && pulsusPlus.settings.hideErrors) return;    
         `)};
         pressKey = ${pulsusPlus.functionReplace(pressKey, /\)&&\((.{1,2})\.keysPressed/, ") && (game.replay.on && pulsusPlus.game.kps.push(millis()), game.keysPressed")};
-        prmptingStringUpdate = ${pulsusPlus.functionReplace(prmptingStringUpdate, /"\\n"===(.*?),1\)/, "continue")};
+        prmptingStringUpdate = ${pulsusPlus.functionReplace(prmptingStringUpdate, "start", `
+            if(pulsusPlus.prmptingString) {
+                pulsusPlus.prmptingString = false;
+                return;
+            };    
+        `).replace(/"\\n"===(.*?),1\)/, "continue")};
         promptRes = ${pulsusPlus.functionReplace(promptRes, "start", `
             if(prmptingString.check === "string") {
                 if(pulsusPlus.shiftKey && e === "submit") {
@@ -1878,6 +2816,10 @@ window.addEventListener("SetupComplete", function() {
                 } catch(error) {};
             };
         `)};
+        promptString = ${pulsusPlus.functionReplace(promptString, "start", `
+            pulsusPlus.prmptingString = true;
+            Timeout.set(() => pulsusPlus.prmptingString = false, 100);    
+        `)}
         queueServer = ${pulsusPlus.functionReplace(queueServer, "start", `
             if(e === undefined) {
                 if(window.onbeforeunload !== null) {
@@ -1898,6 +2840,12 @@ window.addEventListener("SetupComplete", function() {
                 location.reload();
                 return;
             }`)};
+        quitEditor = ${pulsusPlus.functionReplace(quitEditor, "end", `;
+            pulsusPlus.computeSections();
+            game.mods.startPos = 0;
+            game.mods.endPos = pulsusPlus.game.lvlDuration;
+            game.mods.hidden = false;
+        `)}
         releaseKey = ${pulsusPlus.functionReplace(releaseKey, "start", `
             if(pulsusPlus.queuedPress[e]) {
                 pulsusPlus.queuedPress[e] = false;
@@ -1914,8 +2862,9 @@ window.addEventListener("SetupComplete", function() {
             .replace(/"menu_song_copyID"/, `pulsusPlus.shiftKey ? "menu_lvl_new" : "menu_song_copyID"`)
             .replace(/"id"\)\.special\)/g, `"id").special, newGrabUser(newGrabLevelMeta(clevels[t], "id").author, "uuid").user)`)
             .replace(/,(.{1,2})\.lvl\.showMods\?(.{1,2})\.lvl\.modsX/, `,
-            (pulsusPlus.menu.lvlSel !== menu.lvl.sel || pulsusPlus.game.lvlDuration === 0) && (() => {
-                pulsusPlus.menu.lvlSel = menu.lvl.sel;
+            (pulsusPlus.sMenu.lvlSel !== clevels[menu.lvl.sel] || pulsusPlus.sMenu.tab !== menu.lvl.tab || pulsusPlus.game.lvlDuration === 0) && (() => {
+                pulsusPlus.sMenu.lvlSel = clevels[menu.lvl.sel];
+                pulsusPlus.sMenu.tab = menu.lvl.tab;
                 const sel = clevels[menu.lvl.sel];
                 const isLocal = typeof sel === "object";
                 let duration = 0;
@@ -1928,12 +2877,13 @@ window.addEventListener("SetupComplete", function() {
                     duration = lvl.len;
                 };
                 game.mods.startPos = 0;
-                game.mods.endPos = 0;
+                game.mods.endPos = duration;
                 pulsusPlus.game.lvlDuration = duration;
-                menu.lvl.modsNSM.pages[0].items[menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_endPos")].max = duration;
-                menu.lvl.modsNSM.pages[0].items[menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_startPos")].max = duration;
+                Object.keys(pulsusPlus.sMenu.practiceSliders).forEach(key => { pulsusPlus.sMenu.practiceSliders[key].max = duration });
+                game.mods.endPos = duration;
             })(),
             Bt.lvl.showMods ? Bt.lvl.modsX`)
+            .replace(/mods_scoreMultiplier",.*?\.mods\)/, `mods_scoreMultiplier", langSel, calcScoreMulti(Object.fromEntries(Object.entries(game.mods).map(m => {if(m[0].match(/(start|end)pos/gi)) {return [m[0], 0]} else {return m}})))`)
         };
         soundManager.setVolume = ${pulsusPlus.functionReplace(soundManager.setVolume, /setVolume\(/g, `setVolume((pulsusPlus.settings.masterVolume/100) *`)
             .replace(/_undefined/g, "undefined")
@@ -1943,32 +2893,6 @@ window.addEventListener("SetupComplete", function() {
         transitionScreen = ${pulsusPlus.functionReplace(transitionScreen, "start", `pulsusPlus.levelLoaded = false; if(e === "menu") {pulsusPlus.retryCount = 0};`)}
     `);
 
-    const startPosIndex = menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_startPos");
-    menu.lvl.modsNSM.pages[0].items[startPosIndex] = {
-        type: "slider",
-        var: [game.mods, "startPos"],
-        name: "mods_startPos",
-        hint: "mods_startPos_sub",
-        min: 0,
-        max: 0,
-        step: 1000,
-        display: () => {
-            return formatTime(game.mods.startPos, "min:sec");
-        }
-    };
-    const endPosIndex = menu.lvl.modsNSM.pages[0].items.findIndex(b => b.name === "mods_endPos");
-    menu.lvl.modsNSM.pages[0].items[endPosIndex] = {
-        type: "slider",
-        var: [game.mods, "endPos"],
-        name: "mods_endPos",
-        hint: "mods_endPos_sub",
-        min: 0,
-        max: 0,
-        step: 1000,
-        display: () => {
-            return formatTime(game.mods.endPos, "min:sec");
-        }
-    }
     window.addEventListener("resize", (e) => {
         pulsusPlus.fullscreened = Math.abs(innerHeight - screen.height) < 150 && Math.abs(innerWidth - screen.width) < 300;
         if(pulsusPlus.fullscreened && pulsusPlus.settings.resolution !== "noResize") {
@@ -1991,6 +2915,7 @@ window.addEventListener("SetupComplete", function() {
                     data.forEach((item, index) => {
                         let type;
                         if(item[1].split(".")[item[1].split(".").length - 1] === "osu") type = "osu";
+                        else if(item[1].split(".")[item[1].split(".").length - 1] === "chart") type = "ch";
                         else if(item[0].split(",")[0].search(/\{"/) !== -1) type = "json";
                         else if(item[0].split(",")[0].search(/audio/) !== -1) type = "audio";
                         switch(type) {
@@ -2013,6 +2938,9 @@ window.addEventListener("SetupComplete", function() {
                                 break;
                             case "osu":
                                 data[index][2] = "osu";
+                                break;
+                            case "ch":
+                                data[index][2] = "ch";
                                 break;
                             default:
                                 popupMessage({
@@ -2096,6 +3024,10 @@ window.addEventListener("SetupComplete", function() {
                     if(!game.edit) break;
                     pulsusPlus.importOsu([item]);
                     break;
+                case "ch":
+                    if(!game.edit) break;
+                    pulsusPlus.importCH([item]);
+                    break;
             };
         })
     });
@@ -2104,5 +3036,7 @@ window.addEventListener("SetupComplete", function() {
         pulsusPlus.retry = null;
         pulsusPlus.retryDown = false;
         pulsusPlus.skip = false;
+        pulsusPlus.altKey = false;
+        pulsusPlus.shiftKey = false;
     });
 });

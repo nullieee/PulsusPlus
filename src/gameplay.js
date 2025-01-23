@@ -377,6 +377,13 @@ window.addEventListener("WindowClassMade", function() {
             name: "settings_showUR",
             hint: "settings_showUR_sub"
         }, {
+            type: "dropdown",
+            var: [pulsusPlus.settings, "scoreSystem"],
+            name: "PP_GAMEPLAY_GUI_SCORING-SYSTEM",
+            hint: "PP_GAMEPLAY_GUI_SCORING-SYSTEM_HINT",
+            options: ["pulsus", "PSC"],
+            labels: ["PP_GAMEPLAY_GUI_SCORING-SYSTEM_LABEL_PULSUS", "PP_GAMEPLAY_GUI_SCORING-SYSTEM_LABEL_PSC"]
+        }, {
             type: "boolean",
             var: [menu.settings, "showScore"],
             name: "settings_showScore",
@@ -428,6 +435,21 @@ window.addEventListener("WindowClassMade", function() {
             hue: [pulsusPlus.settings.overlayNum, "hue"],
             saturation: [pulsusPlus.settings.overlayNum, "saturation"],
             brightness: [pulsusPlus.settings.overlayNum, "brightness"]
+        }, {
+            type: "boolean",
+            var: [pulsusPlus.settings, "showOverlayKps"],
+            name: "PP_GAMEPLAY_GUI_SHOW-OVERLAY-KPS",
+            hint: "PP_GAMEPLAY_GUI_SHOW-OVERLAY-KPS_HINT"
+        }, {
+            type: "boolean",
+            var: [pulsusPlus.settings, "showOverlayMax"],
+            name: "PP_GAMEPLAY_GUI_SHOW-OVERLAY-MAX",
+            hint: "PP_GAMEPLAY_GUI_SHOW-OVERLAY-MAX_HINT"
+        }, {
+            type: "boolean",
+            var: [pulsusPlus.settings, "showOverlayTot"],
+            name: "PP_GAMEPLAY_GUI_SHOW-OVERLAY-TOT",
+            hint: "PP_GAMEPLAY_GUI_SHOW-OVERLAY-TOT_HINT"
         }]
     }
     ]);

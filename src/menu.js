@@ -8,7 +8,34 @@ window.addEventListener("WindowClassMade", function() {
         langs["en"][`PP_MENU_MISC_RESOLUTION_LABEL_${option[0]}x${option[1]}` + (option[2] ? "-NATIVE" : "")] = `${option[0]}x${option[1]}` + (option[2] ? " (native)" : "");
     });
     let resolutionLabels = resolutionOptions.map(x => `PP_MENU_MISC_RESOLUTION_LABEL_${x[0]}x${x[1]}` + (x[2] ? "-NATIVE" : ""));
-    resolutionOptions = resolutionOptions.map(x => x[2] ? "native" : `${x[0]}x${x[1]}`)
+    resolutionOptions = resolutionOptions.map(x => x[2] ? "native" : `${x[0]}x${x[1]}`);
+    pulsusPlus.copyLevel = function(lvl) {
+        if(lvl.local) {
+            const index = levels.saved.length;
+            levels.saved.push(lvl);
+            levels.saved[index].title = `Copy of ${levels.saved[index].title}`;
+            popupMessage({
+                type: "success",
+                message: "menu_lvl_copied"
+            });
+            return;
+        }
+        const map = newGrabLevelMeta(lvl, "id");
+        if(map.id === 0) {
+            return popupMessage({
+                type: "error",
+                message: "PP_ERROR_COPY-MAP_NO-SELECT"
+            })
+        }
+        if(map.beat === "Metadata") {
+            return popupMessage({
+                type: "error",
+                message: "PP_ERROR_COPY-MAP_NO-DOWNLOAD",
+                keys: [map.title]
+            })
+        }
+        copyLevel(clevels[menu.lvl.sel]);
+    };
     // - Related variables - //
 
     // - Settings menu - //
@@ -84,21 +111,7 @@ window.addEventListener("WindowClassMade", function() {
             name: "PP_MENU_MENU_COPY-MAP",
             hint: "PP_MENU_MENU_COPY-MAP_HINT",
             event: () => {
-                const map = newGrabLevelMeta(clevels[menu.lvl.sel], "id");
-                if(map.id === 0) {
-                    return popupMessage({
-                        type: "error",
-                        message: "PP_ERROR_COPY-MAP_NO-SELECT"
-                    })
-                }
-                if(map.beat === "Metadata") {
-                    return popupMessage({
-                        type: "error",
-                        message: "PP_ERROR_COPY-MAP_NO-DOWNLOAD",
-                        keys: [map.title]
-                    })
-                }
-                copyLevel(clevels[menu.lvl.sel]);
+                pulsusPlus.copyLevel(clevels[menu.lvl.sel]);
             }
         }, {
             type: "dropdown",
