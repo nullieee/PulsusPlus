@@ -17,7 +17,7 @@ document.addEventListener("toggleLoaded", function(e) {
     pulsusPlusContainer.appendChild(extensionURL);
 
     for(file of [
-        "src/mathjs.min.js", "src/timeout.js", "src/lodash.min.js", "src/PulsusPlusWindow.js", "src/init.js", // Important stuff
+        "src/mathjs.min.js", "src/timeout.js", "src/lodash.min.js", "src/jszip.min.js", "src/PulsusPlusWindow.js", "src/init.js", // Important stuff
         "src/menu.js", "src/customTheme.js", "src/gameplay.js", "src/editor.js", "src/keybinds.js", "src/extras.js", // Popup windows
         "src/keybindHandler.js" // Other utilities
         //"dist/bundle.js"    

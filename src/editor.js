@@ -35,7 +35,10 @@ window.addEventListener("WindowClassMade", function() {
         chordType: 0,
         
         effectType: "any",
-        displayTrack: -1,
+        subtitleText: "",
+        subtitleMatch: "exact",
+        displayTrackStart: 0,
+        displayTrackEnd: 21,
 
         gradientStart: {
             hue: 45,
@@ -100,8 +103,9 @@ window.addEventListener("WindowClassMade", function() {
         const timeCondition = options.timeCondition;
         if(game.editorMode === 0) {
             pulsusPlus.refreshBeat();
-            const firstSelected = game.beat[game.selectedBeats[0]];
-            const lastSelected = game.beat[game.selectedBeats[game.selectedBeats.length-1]];
+            const rangeSelectValid = game.selectedBeats.length >= 2;
+            const firstSelected = game.selectedBeats[0];
+            const lastSelected = game.selectedBeats[game.selectedBeats.length-1];
             game.selectedBeats = [];
             const noteType = options.noteType;
             const snap = options.snap;
@@ -109,183 +113,248 @@ window.addEventListener("WindowClassMade", function() {
             const advNoteType = options.advNoteType;
             const selectStreamEnd = options.selectStreamEnd;
             const holdType = options.holdType;
-    
-            let anchors = [];
-            let chords = {};
-            game.beat.forEach((b, i) => {
-                const time = String(round(b[1], 6));
-                if(typeof chords[time] === "undefined") {
-                    chords[time] = [];
-                    chords[time].push(i);
-                } else {
-                    chords[time].push(i)
-                };
-                if(i === game.beat.length - 1) return;
-                if(b[5] === 0) return;
-                let nextI = i;
-                while(round(b[1] - game.beat[nextI][1], 6) === 0) {
-                    if(++nextI >= game.beat.length - 1) return;
-                };
-                if(round(b[1] + b[6] - game.beat[nextI][1], 6) > 0) {
-                    anchors.push(i);
-                };
-            });
-            const chordSorted = Object.keys(chords).sort((a, b) => parseFloat(a) - parseFloat(b));
-            // check selection area
-            if(selectArea === "range" && (firstSelected === undefined || lastSelected === undefined || firstSelected === lastSelected)) {
+            const holdLength = options.holdLength;
+
+            if(!rangeSelectValid && selectArea === "range") {
                 popupMessage({
                     type: "error",
                     message: "PP_ERROR_INVALID-RANGE"
                 });
-                throw new Error(lang("PP_ERROR_INVALID-RANGE", langSel));
-            };
-            game.beat.forEach((beat, index) => {
-                // set parameters
-                let time = String(round(beat[1], 6));
-                const currTickIndex = chords[time]
-                const currTick = currTickIndex.map(i => game.beat[i]);
+                return;
+            }
 
-                let prevBeat, nextBeat;
-                let currTickPos = chordSorted.indexOf(time);
-                if(currTickPos !== 0 && chordSorted[currTickPos+1] !== undefined) {
-                    nextBeat = game.beat[chords[chordSorted[currTickPos + 1]][0]];
-                    prevBeat = game.beat[chords[chordSorted[currTickPos - 1]][0]];
+            const notes = lodash.cloneDeep(game.beat).map(note => {
+                note[1] = round(pulsusPlus.convertTime(note[1]*1e4));
+                note[6] = note[5] === 0 ? 0 : round(pulsusPlus.convertTime(note[6]*1e4))
+                return {
+                    time: note[1],
+                    hold: note[5] === 1,
+                    holdLength: note[6],
+                    bpm: note[9]
                 };
+            });
 
-                let isAnchor = anchors.indexOf(index) !== -1;
+            function getAdjecent(index, position) {
+                if(position === "next") {
+                    if(index < notes.length - 1) {
+                        const note = notes[index];
+                        let next = index + 1;
+                        while(note.time === notes[next]?.time) { next++ };
+                        if(next < notes.length) {
+                            return notes[next];
+                        }
+                        return false;
+                    }
+                    return false;
+                } else if(position === "prev") {
+                    if(index > 0) {
+                        const note = notes[index];
+                        let prev = index - 1;
+                        while(note.time === notes[prev]?.time) { prev-- };
+                        if(prev >= 0) {
+                            return notes[prev];
+                        }
+                        return false;
+                    }
+                    return false;
+                }
+                throw new Error(`Invalid position "${position}"`)
+            }
 
-                // check chord type
-                if(chordType !== 0) {
-                    if(currTick.length !== chordType) return;
-                };
+            const anchors = [];
+            const noteTimes = {};
+            notes.forEach((note, index) => {
+                let timeS = String(note.time);
+                if(typeof noteTimes[timeS] === "undefined") {
+                    noteTimes[timeS] = [index];
+                } else {
+                    noteTimes[timeS].push(index);
+                }
+                if(!note.hold) return;
+                const next = getAdjecent(index, "next");
+                if(!next) return;
+                if(note.time + note.holdLength - 10 > next.time) {
+                    anchors.push(index);
+                }
+            });
 
-                // hold specific stuff
-                switch(holdType) {
-                    case "any":
+            notes.forEach((note, index) => {
+                const currTime = round(pulsusPlus.convertTime(game.time*1e4));
+                const noteTime = note.time + (timeCondition === "tick" ? 0 : note.holdLength);
+                switch(selectArea) {
+                    case "noConstrain":
                         break;
-                    case "anchor":
-                        if(isAnchor && beat[5] === 1) break;
-                        return;
-                    case "noAnchor":
-                        if(!isAnchor && beat[5] === 1) break;
-                        return;
-                };
+                    case "before":
+                        if(noteTime > currTime) return;
+                        break;
+                    case "after":
+                        if(noteTime < currTime) return;
+                        break;
+                    case "range":
+                        if(noteTime < notes[firstSelected].time || noteTime > notes[lastSelected].time) return;
+                }
 
-                // check note type
+                const next = getAdjecent(index, "next");
+                const prev = getAdjecent(index, "prev");
+
+                let timeS = String(note.time);
+                const isHold = noteTimes[timeS].some(noteIndex => notes[noteIndex].hold);
+                if(chordType !== 0) {
+                    if(noteTimes[timeS].length !== chordType) return;
+                }
+
                 switch(noteType) {
                     case "any":
                         break;
                     case "beat":
-                        if(!currTick.some(b => b[5] !== 0)) break;
-                        return;
+                        if(isHold) return;
+                        break;
                     case "hold":
-                        if(beat[5] === 1) break;
-                        return;
-                };
-
-                // selection area
-                switch(selectArea) {
-                    case "noConstrain":
+                        if(!isHold) return;
                         break;
-                    case "before":
-                        if(beat[1] <= game.time && (timeCondition === "tick" || (beat[1] + (beat[5] ? beat[6] : 0) <= game.time))) break;
-                        return;
-                    case "after":
-                        if(beat[1] >= game.time) break;
-                        return;
-                    case "range":
-                        if(beat[1] >= firstSelected[1] && beat[1] <= lastSelected[1]) break;
-                        return;
-                };
+                }
 
-                // check snap & stream end
-                switch(snap) {
-                    case 0:
-                        break;
-                    default:
-                        const nextIsStream = typeof nextBeat === "undefined" ? false : round(pulsusPlus.convertTime((beat[9]/60) * (nextBeat[1] - beat[1])), 6) === round(snap,6);
-                        const lastIsStream = typeof prevBeat === "undefined" ? false : round(pulsusPlus.convertTime((beat[9]/60) * (beat[1] - prevBeat[1])), 6) === round(snap, 6);
-                        if(advNoteType === "streamEnd") {
-                            if(!(!nextIsStream && lastIsStream)) return;
-                        };
-                        if(advNoteType !== "streamEnd") {
-                            if(!(nextIsStream || (selectStreamEnd && lastIsStream))) return;
-                        };
-                        break;
-                };
-
-                // check advanced note type
                 switch(advNoteType) {
                     case "any":
                         break;
-                    case "streamEnd":
-                        break;
                     case "anchorEnd":
-                        if(anchors.map(a => round(game.beat[a][1] + game.beat[a][6], 6)).indexOf(round(beat[1], 6)) !== -1) break;
-                        return;
+                        if(!anchors.some(anchorIndex => notes[anchorIndex].time + notes[anchorIndex].holdLength === note.time)) return;
+                        break;
+                    case "streamEnd":
+                        if(snap === 0) break;
+                        if(!prev) return;
+                        if(round(prev.bpm/60e4/snap * (note.time - prev.time), 2) !== 1) return;
+                        if(next && round(note.bpm/60e4/snap * ((next.time ?? 0) - note.time), 2) === 1) return;
+                        break;
                     case "nestedAnchor":
-                        if(isAnchor && anchors.map(a => [game.beat[a][1], game.beat[a][1] + game.beat[a][6]]).some(a => a[0] < beat[1] && a[1] > beat[1])) break;
-                        return;
-                };
-                
-                game.selectedBeats.push(...currTickIndex);
-                game.selectedBeats = Array.from(new Set(game.selectedBeats));
+                        if(!(anchors.some(anchorIndex => notes[anchorIndex].time + notes[anchorIndex].holdLength > note.time && note.time > notes[anchorIndex].time) && anchors.includes(index))) return;
+                        break;
+                }
+
+                switch(holdType) {
+                    case "any":
+                        break;
+                    case "anchor":
+                        if(!anchors.some(anchorIndex => noteTimes[timeS].includes(anchorIndex))) return;
+                        break;
+                    case "noAnchor":
+                        if(anchors.some(anchorIndex => noteTimes[timeS].includes(anchorIndex)) || !isHold) return;
+                        break;
+                }
+
+                if(holdLength !== 0) {
+                    if(round(note.bpm/60e4/holdLength * note.holdLength, 2) !== 1) return;
+                }
+
+                if(snap !== 0) {
+                    if(selectStreamEnd) {
+                        if(prev && round(prev.bpm/60e4/snap * (note.time - (prev.time ?? 0)), 2) !== 1
+                            && next && round(note.bpm/60e4/snap * ((next.time ?? 0) - note.time), 2) !== 1) return;
+                    } else {
+                        if(!next) return;
+                        if(round(note.bpm/60e4/snap * (next.time - note.time), 2) !== 1) return;
+                    }
+                }
+
+                game.selectedBeats.push(...noteTimes[timeS]);
             });
+            game.selectedBeats = Array.from(new Set(game.selectedBeats));
         } else {
             pulsusPlus.refreshEffects();
             const firstSelected = game.effects[game.effectMultiSel[0]];
             const lastSelected = game.effects[game.effectMultiSel[game.effectMultiSel.length-1]];
+            const rangeSelectValid = game.effectMultiSel.length >= 2;
             game.effectMultiSel = [];
             const effectType = options.effectType;
-            const displayTrack = options.displayTrack;
-            // check selection area
-            if(selectArea === "range" && (firstSelected === undefined || lastSelected === undefined || firstSelected === lastSelected)) {
+            const subtitleText = options.subtitleText;
+            const subtitleMatch = options.subtitleMatch;
+            const displayTrackStart = options.displayTrackStart;
+            const displayTrackEnd = options.displayTrackEnd;
+
+            if(!rangeSelectValid && selectArea === "range") {
                 popupMessage({
                     type: "error",
                     message: "PP_ERROR_INVALID-RANGE"
                 });
-                throw new Error(lang("PP_ERROR_INVALID-RANGE", langSel));
+                return;
             };
 
-            game.effects.forEach((effect, index) => {
+            const effects = lodash.cloneDeep(game.effects.map(effect => Object.fromEntries(Object.entries(effect)))).map(effect => {
+                effect.time = round(pulsusPlus.convertTime(effect.time*1e4));
+                effect.moveTime = round(pulsusPlus.convertTime(effect.moveTime*1e4));
+                return effect
+            });
 
-                // effect type
-                switch(effectType) {
-                    case "any":
-                        break;
-                    default:
-                        if(effect.type === effectType) break;
-                        return;
-                };
-
-                // display track
-                switch(displayTrack) {
-                    case -1:
-                        break;
-                    default:
-                        if(effect.track === displayTrack) break;
-                        return;
-                };
-
-                // selection area
+            effects.forEach((effect, index) => {
+                const currTime = round(pulsusPlus.convertTime(game.time*1e4));
+                const effectTime = effect.time + (timeCondition === "tick" ? 0 : effect.moveTime);
                 switch(selectArea) {
                     case "noConstrain":
                         break;
                     case "before":
-                        if(effect.time <= game.time && (timeCondition === "tick" || (effect.time + effect.moveTime <= game.time))) break;
-                        return;
+                        if(effectTime > currTime) return;
+                        break;
                     case "after":
-                        if(effect.time >= game.time) break;
-                        return;
+                        if(effectTime < currTime) return;
+                        break;
                     case "range":
-                        if(effect.time >= firstSelected.time && effect.time <= lastSelected.time) break;
-                        return;
-                };
+                        if(effectTime < notes[firstSelected].time || effectTime > notes[lastSelected].time) return;
+                }
+
+                if(effect.track < displayTrackStart || effect.track > displayTrackEnd) return;
+
+                if(effectType !== "any") {
+                    if(effect.type !== effectType) return;
+                    if(effectType === 9) { // subtitle
+                        switch(subtitleMatch) {
+                            case "exact":
+                                if(effect.text !== subtitleText) return;
+                                break;
+                            case "includeText":
+                                if(!effect.text.match(new RegExp(subtitleText, "g"))) return;
+                        }
+                    }
+
+                }
 
                 game.effectMultiSel.push(index);
-            });
+            })
         }
     };
+
+    pulsusPlus.exportLevel = function(lvl) {
+        const exportWithJSZip = pulsusPlus.settings.lvlExportMode !== "json";
+        if(lvl.local) {
+            pulsusPlus.downloadJSON(`${lvl.title.replace(/[^a-zA-Z0-9 ]/g, '')}.json`, lvl, exportWithJSZip ? pulsusPlus.settings.lvlExportMode : undefined);
+        } else {
+            const map = newGrabLevelMeta(clevels[menu.lvl.sel], "id");
+            if(getLevelDownloadState(clevels[menu.lvl.sel]) !== 2 || map.beat === "Metadata") {
+                popupMessage({
+                    type: "error",
+                    message: "PP_ERROR_LEVEL-NOT-DOWNLOADED"
+                });
+                return;
+            };
+            pulsusPlus.downloadJSON(`${map.title}.json`, {
+                ar: map.ar,
+                author: map.author,
+                beat: map.beat,
+                bg: map.bg,
+                bpm: map.bpm,
+                copy: map.id,
+                desc: map.desc,
+                effects: map.effects,
+                hpD: map.hpD,
+                hw: map.hw,
+                local: true,
+                sections: map.sections,
+                song: map.song,
+                songOffset: map.songOffset,
+                stars: map.stars,
+                title: map.title
+            }, exportWithJSZip ? pulsusPlus.settings.lvlExportMode : undefined)
+        }
+    }
     // - Related variables - //
 
     // - Settings menu - //
@@ -297,9 +366,9 @@ window.addEventListener("WindowClassMade", function() {
             var: [pulsusPlus, "playbackRate"],
             name: "PP_EDITOR_GENERAL_PLAYBACK-RATE",
             hint: "PP_EDITOR_GENERAL_PLAYBACK-RATE_HINT",
-            min: 0.1,
+            min: 0.25,
             max: 2,
-            smallChange: .1,
+            smallChange: .05,
             bigChange: .25,
             update: () => {
                 if(game.playbackRate !== pulsusPlus.playbackRate) {
@@ -330,15 +399,57 @@ window.addEventListener("WindowClassMade", function() {
             name: "PP_EDITOR_GENERAL_TIMING-POINTS",
             hint: "PP_EDITOR_GENERAL_TIMING-POINTS_HINT"
         }, {
+            type: "boolean",
+            var: [pulsusPlus.settings, "noteFade"],
+            name: "PP_EDITOR_GENERAL_END-FADE",
+            hint: "PP_EDITOR_GENERAL_END-FADE_HINT"
+        }, {
+            type: "dropdown",
+            var: [pulsusPlus.settings, "defaultBg"],
+            name: "PP_EDITOR_GENERAL_DEFAULT-BG",
+            hint: "PP_EDITOR_GENERAL_DEFAULT-BG_HINT",
+            options: ["blank", "black"],
+            labels: ["PP_EDITOR_GENERAL_DEFAULT-BG_LABEL_BLANK", "PP_EDITOR_GENERAL_DEFAULT-BG_LABEL_BLACK"]
+        }, {
             type: "button",
             name: "PP_EDITOR_GENERAL_IMPORT-OSU",
             hint: "PP_EDITOR_GENERAL_IMPORT-OSU_HINT",
-            event: () => osuImport.click()
+            event: () => {
+                if(!game.edit) {
+                    popupMessage({
+                        type: "error",
+                        message: "PP_ERROR_NO-EDIT"
+                    });
+                    return;
+                };
+                osuImport.click()
+            }
+        }, {
+            type: "button",
+            name: "PP_EDITOR_GENERAL_IMPORT-CH",
+            hint: "PP_EDITOR_GENERAL_IMPORT-CH_HINT",
+            event: () => {
+                if(!game.edit) {
+                    popupMessage({
+                        type: "error",
+                        message: "PP_ERROR_NO-EDIT"
+                    });
+                    return;
+                };
+                chImport.click()
+            }
         }, {
             type: "button",
             name: "PP_EDITOR_GENERAL_NEW-DIFFICULTY",
             hint: "PP_EDITOR_GENERAL_NEW-DIFFICULTY_HINT",
             event: () => {
+                if(!menu.lvl.sel) {
+                    popupMessage({
+                        type: "error",
+                        message: "PP_ERROR_NO-MAP-SELECTED"
+                    });
+                    return;
+                };
                 const reference = clevels[menu.lvl.sel];
                 if(typeof reference === "object") {
                     pulsusPlus.createNewDifficulty(reference);
@@ -358,6 +469,13 @@ window.addEventListener("WindowClassMade", function() {
             name: "_blank",
             hint: "_blank"
         }, {
+            type: "dropdown",
+            var: [pulsusPlus.settings, "lvlExportMode"],
+            name: "PP_EDITOR_GENERAL_EXPORT-AS",
+            hint: "PP_EDITOR_GENERAL_EXPORT-AS_HINT",
+            options: ["json", "pls", "phz"],
+            labels: ["PP_FILE_JSON", "PP_FILE_PULSEHAX-1", "PP_FILE_PULSEHAX-2"]
+        }, {
             type: "button",
             name: "PP_EDITOR_GENERAL_IMPORT-MAP",
             hint: "PP_EDITOR_GENERAL_IMPORT-MAP_HINT",
@@ -369,15 +487,14 @@ window.addEventListener("WindowClassMade", function() {
             name: "PP_EDITOR_GENERAL_EXPORT-MAP",
             hint: "PP_EDITOR_GENERAL_EXPORT-MAP_HINT",
             event: () => {
-                const reference = clevels[menu.lvl.sel];
-                if(typeof reference !== "object" || reference.local !== true) {
+                if(!menu.lvl.sel) {
                     popupMessage({
                         type: "error",
-                        message: "PP_ERROR_LEVEL-NOT-LOCAL"
+                        message: "PP_ERROR_NO-MAP-SELECTED"
                     });
                     return;
                 };
-                pulsusPlus.downloadJSON(`${reference.title}.json`, reference)
+                pulsusPlus.exportLevel(clevels[menu.lvl.sel]);
             }
         }, {
             type: "divider",
@@ -443,13 +560,23 @@ window.addEventListener("WindowClassMade", function() {
             labels: ["PP_EDITOR_SELECT_HOLD-TYPE_LABEL_ANY", "PP_EDITOR_SELECT_HOLD-TYPE_LABEL_ANCHOR", "PP_EDITOR_SELECT_HOLD-TYPE_LABEL_NO-ANCHOR"]
         }, {
             type: "number",
+            var: [pulsusPlus.editorOptions, "holdLength"],
+            name: "PP_EDITOR_SELECT_HOLD-LENGTH",
+            hint: "PP_EDITOR_SELECT_HOLD-LENGTH_HINT",
+            min: 0,
+            max: false,
+            smallChange: 1/8,
+            bigChange: 1/4,
+            display: () => pulsusPlus.editorOptions.holdLength === 0 ? "Any" : round(pulsusPlus.editorOptions.holdLength, 6)
+        }, {
+            type: "number",
             var: [pulsusPlus.editorOptions, "snap"],
             name: "PP_EDITOR_SELECT_SNAP",
             hint: "PP_EDITOR_SELECT_SNAP_HINT",
             min: 0,
             max: false,
-            smallChange: 1/4,
-            bigChange: 1/3,
+            smallChange: 1/8,
+            bigChange: 1/4,
             display: () => pulsusPlus.editorOptions.snap === 0 ? "Any" : round(pulsusPlus.editorOptions.snap, 6)
         }, {
             type: "boolean",
@@ -644,15 +771,39 @@ window.addEventListener("WindowClassMade", function() {
                 "edit_effects_type_trailTile"
             ]
         }, {
+            type: "string",
+            var: [pulsusPlus.editorOptions, "subtitleText"],
+            name: "PP_EDITOR_EFFECTS_SUBTITLE-TEXT",
+            hint: "PP_EDITOR_EFFECTS_SUBTITLE-TEXT_HINT",
+            allowEmpty: true
+        }, {
+            type: "dropdown",
+            var: [pulsusPlus.editorOptions, "subtitleMatch"],
+            name: "PP_EDITOR_EFFECTS_SUBTITLE-MATCH",
+            hint: "PP_EDITOR_EFFECTS_SUBTITLE-MATCH_HINT",
+            options: ["exact", "includeText"],
+            labels: [
+                "PP_EDITOR_EFFECTS_SUBTITLE-MATCH_LABEL_EXACT",
+                "PP_EDITOR_EFFECTS_SUBTITLE-MATCH_LABEL_INCLUDE-TEXT"
+            ]
+        }, {
             type: "number",
-            var: [pulsusPlus.editorOptions, "displayTrack"],
-            name: "PP_EDITOR_EFFECTS_DISPLAY-TRACK",
-            hint: "PP_EDITOR_EFFECTS_DISPLAY-TRACK_HINT",
-            min: -1,
+            var: [pulsusPlus.editorOptions, "displayTrackStart"],
+            name: "PP_EDITOR_EFFECTS_DISPLAY-TRACK-START",
+            hint: "PP_EDITOR_EFFECTS_DISPLAY-TRACK-START_HINT",
+            min: 0,
             max: 21,
             smallChange: .5,
-            bigChange: 1,
-            display: () => pulsusPlus.editorOptions.displayTrack === -1 ? "-1 (Any)" : pulsusPlus.editorOptions.displayTrack
+            bigChange: 1
+        }, {
+            type: "number",
+            var: [pulsusPlus.editorOptions, "displayTrackEnd"],
+            name: "PP_EDITOR_EFFECTS_DISPLAY-TRACK-END",
+            hint: "PP_EDITOR_EFFECTS_DISPLAY-TRACK-END_HINT",
+            min: 0,
+            max: 21,
+            smallChange: .5,
+            bigChange: 1
         }, {
             type: "dropdown",
             var: [pulsusPlus.editorOptions, "selectArea"],
@@ -767,11 +918,4 @@ window.addEventListener("WindowClassMade", function() {
 
     // The good stuff
     pulsusPlus.editor = new PulsusPlusWindow("EDITOR", ...properties, 5, pulsusPlus.editorNSM);
-    eval(`
-        adjustCanvas = ${pulsusPlus.functionReplace(adjustCanvas, "end", `
-            if(!lodash.isEqual(pulsusPlus.editorOptions, pulsusPlus.editorOptionsBuffer)) {
-               //stuff
-            }
-        `)}
-    `);
 });
