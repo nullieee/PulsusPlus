@@ -388,6 +388,8 @@ window.addEventListener("WindowClassMade", function(){
                                         pulsusPlus.sMenu.practiceDisabled = true;
                                     } else {
                                         pulsusPlus.sMenu.practiceDisabled = false;
+                                    }
+                                    if(!pulsusPlus.sMenu.practice) {
                                         pulsusPlus.sMenu.lastSel = clevels[menu.lvl.sel];
                                     }
                                     PulsusPlusWindow.allInstances.forEach((instance) => {
@@ -666,8 +668,8 @@ window.addEventListener("WindowClassMade", function(){
                     game.playingOffset = game.time;
                 }
                 // scroll timeline
-                if(e.code.match(/Key(A|D)$/)) {
-                    pulsusPlus.scrollTimeline(e.code.match("KeyA") ? "LEFT" : "RIGHT", e.shiftKey);
+                if(e.code.match(/Key(A|D)$/) || e.code.match(/Arrow(Left|Right)$/)) {
+                    pulsusPlus.scrollTimeline(e.code.match(/KeyA|ArrowLeft/) ? "LEFT" : "RIGHT", e.shiftKey);
                 }
                 // move selected beats
                 if(e.code.match(/Key(J|K)$/) && game.selectedBeats.length !== 0 && game.editorMode === 0) {
@@ -815,6 +817,9 @@ window.addEventListener("WindowClassMade", function(){
                     v.dragStart = -1000;
                     const prog = (constrain(mouseX, sliderStart, sliderEnd) - sliderStart)/(sliderWidth);
                     game.mods[k] = v.min + (prog * (v.max - v.min));
+                    if(prog < 1) {
+                        game.mods[k] = round(game.mods[k]/1e3)*1e3
+                    }
                     const pos = k.match(/start/gi) ? "practiceStart" : "practiceEnd";
                     pulsusPlus.sMenu[pos] = [1, game.mods[k]];
                     pulsusPlus.sMenu.practiceUsed = true; 
@@ -866,6 +871,9 @@ window.addEventListener("WindowClassMade", function(){
             if(Math.abs(deltaDrag) >= sliderWidth/(deltaRange * 100)) {
                 const prog = (constrain(mouseX, sliderStart, sliderEnd) - sliderStart)/(sliderWidth);
                 game.mods[k] = v.min + (prog * (v.max - v.min));
+                if(prog < 1) {
+                    game.mods[k] = round(game.mods[k]/1e3)*1e3
+                }
                 const pos = k.match(/start/gi) ? "practiceStart" : "practiceEnd";
                 pulsusPlus.sMenu[pos] = [1, game.mods[k]];
                 pulsusPlus.sMenu.practiceUsed = true; 

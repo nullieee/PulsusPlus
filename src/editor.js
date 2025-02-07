@@ -134,12 +134,16 @@ window.addEventListener("WindowClassMade", function() {
                 };
             });
 
+            function areEqual(val1, val2) {
+                return Math.abs(val1 - val2) <= 9
+            }
+
             function getAdjecent(index, position) {
                 if(position === "next") {
                     if(index < notes.length - 1) {
                         const note = notes[index];
                         let next = index + 1;
-                        while(note.time === notes[next]?.time) { next++ };
+                        while(areEqual(note.time, notes[next]?.time)) { next++ };
                         if(next < notes.length) {
                             return notes[next];
                         }
@@ -150,7 +154,7 @@ window.addEventListener("WindowClassMade", function() {
                     if(index > 0) {
                         const note = notes[index];
                         let prev = index - 1;
-                        while(note.time === notes[prev]?.time) { prev-- };
+                        while(areEqual(note.time, notes[prev]?.time)) { prev-- };
                         if(prev >= 0) {
                             return notes[prev];
                         }
@@ -218,7 +222,7 @@ window.addEventListener("WindowClassMade", function() {
                     case "any":
                         break;
                     case "anchorEnd":
-                        if(!anchors.some(anchorIndex => notes[anchorIndex].time + notes[anchorIndex].holdLength === note.time)) return;
+                        if(!anchors.some(anchorIndex => areEqual(notes[anchorIndex].time + notes[anchorIndex].holdLength, note.time))) return;
                         break;
                     case "streamEnd":
                         if(snap === 0) break;

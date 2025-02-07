@@ -239,8 +239,8 @@ window.addEventListener("WindowClassMade", function() {
     }, {
         title: "PP_KEYBINDS_EDITOR_HEADER",
         items: [...[
-            ["scrollTimelinesmall", "A/D/Scroll"],
-            ["scrollTimelinebig", "Shift + A/D/Scroll"],
+            ["scrollTimelinesmall", "A/D/Left/Right/Scroll"],
+            ["scrollTimelinebig", "Shift + A/D/Left/Right/Scroll"],
             "jumpFirst",
             "jumpLast",
             "addBookmark",

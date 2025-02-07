@@ -1,7 +1,7 @@
 // PulsusPlus configurations
 
 const pulsusPlus = {
-    version: "gamma-v1.0",
+    version: "gamma-v1.1",
     dev: true,
     updateNotice: false,
     extensionURL: document.getElementById("extension-url").name,
@@ -1839,12 +1839,13 @@ function completeSetup() {
         text("Sections", width/6, 0);
         translate(vw/2 + width/3 + vw*11/2, 0);
 
-        pulsusPlus.modMenuButton(5, gameScreen === "game" && pulsusPlus.sMenu.practiceUsed ? "Retry" : "Close", width - matrix.get().x - vw - vw*11/2, vw*3/2 + 2 * (vw*3 + vh/2), vw*11, vw*3, () => {
+        pulsusPlus.modMenuButton(6, gameScreen === "game" && pulsusPlus.sMenu.practiceUsed ? "Retry" : "Close", width - matrix.get().x - vw - vw*11/2, vw*3/2 + 2 * (vw*3 + vh/2), vw*11, vw*3, () => {
             if(gameScreen === "game" && pulsusPlus.sMenu.practiceUsed) {
                 pauseAction("retry");
             }
             pulsusPlus.sMenu.practice = false;
             pulsusPlus.sMenu.practiceY = 0;
+            pulsusPlus.sMenu.lastSel = clevels[menu.lvl.sel];
         });
         
         if(pulsusPlus.sMenu.practiceDisabled) {
@@ -1858,17 +1859,18 @@ function completeSetup() {
         pulsusPlus.practiceSlider("endPos", (width - matrix.get().x)/2, vw*3 + vh/2, 1);
         pop();
 
-        pulsusPlus.modMenuButton(2, "Set Start", 0, vw*3/2, vw*11, vw*3, () => {
+        pulsusPlus.modMenuButton(3, "Set Start", 0, vw*3/2, vw*11, vw*3, () => {
+            console.log("asd")
             pulsusPlus.sMenu.practiceStart = [0, pulsusPlus.sMenu.practiceSelected];
             game.mods.startPos = pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceSelected].time;
             pulsusPlus.sMenu.practiceUsed = true;
         }, pulsusPlus.sMenu.practiceSelected === -1 || (pulsusPlus.sMenu.practiceSelected === pulsusPlus.sMenu.practiceEnd[1] && pulsusPlus.sMenu.practiceEnd[0] === 0));
-        pulsusPlus.modMenuButton(3, "Set End", 0, vw*3/2 + vw*3 + vh/2, vw*11, vw*3, () => {
+        pulsusPlus.modMenuButton(4, "Set End", 0, vw*3/2 + vw*3 + vh/2, vw*11, vw*3, () => {
             pulsusPlus.sMenu.practiceEnd = [0, pulsusPlus.sMenu.practiceSelected];
             game.mods.endPos = pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceSelected].time;
             pulsusPlus.sMenu.practiceUsed = true;
         }, pulsusPlus.sMenu.practiceSelected === -1  || pulsusPlus.sMenu.practiceSections[pulsusPlus.sMenu.practiceSelected]?.time === 0 || (pulsusPlus.sMenu.practiceSelected === pulsusPlus.sMenu.practiceStart[1] && pulsusPlus.sMenu.practiceStart[0] === 0));
-        pulsusPlus.modMenuButton(4, "Reset", 0, vw*3/2 + 2 * (vw*3 + vh/2), vw*11, vw*3, () => {
+        pulsusPlus.modMenuButton(5, "Reset", 0, vw*3/2 + 2 * (vw*3 + vh/2), vw*11, vw*3, () => {
             pulsusPlus.sMenu.practiceStart = [1, 0];
             pulsusPlus.sMenu.practiceEnd = [1, pulsusPlus.game.lvlDuration];
             game.mods.startPos = 0;
@@ -1977,8 +1979,20 @@ function completeSetup() {
         pulsusPlus.modSlider("hitWindow", 0, vw*6, 2, .25, true, 2);
         translate(-matrix.get().x + width-vw*14, -matrix.get().y + height/6 + height * (pulsusPlus.sMenu.modsYDis - 1));
         pulsusPlus.modMenuButton(0, "Reset Mods", vw*11/2+vw, vw*3/2, vw*11, vw*3, pulsusPlus.resetMods);
-        pulsusPlus.modMenuButton(1, "Practice Setup", vw*11/2+vw, vw*3.5 + vw*3/2, vw*11, vw*3, () => {pulsusPlus.sMenu.mods = false; pulsusPlus.sMenu.modsY = 0; pulsusPlus.sMenu.practice = true; pulsusPlus.sMenu.practiceY = 1});
-        pulsusPlus.modMenuButton(2, "Close", vw*11/2+vw, vw*7 + vw*3/2, vw*11, vw*3, () => {pulsusPlus.sMenu.mods = false; pulsusPlus.sMenu.modsY = 0});
+        pulsusPlus.modMenuButton(1, "Practice Setup", vw*11/2+vw, vw*3.5 + vw*3/2, vw*11, vw*3, () => {
+            pulsusPlus.sMenu.mods = false;
+            pulsusPlus.sMenu.modsY = 0;
+            if(typeof pulsusPlus.sMenu.lastSel === "object") {
+                if(pulsusPlus.sMenu.lastSel.stars !== clevels[menu.lvl.sel].stars) {
+                    pulsusPlus.sMenu.practiceSections = pulsusPlus.computeSections();
+                }
+            } else if(pulsusPlus.sMenu.lastSel !== clevels[menu.lvl.sel]) {
+                pulsusPlus.sMenu.practiceSections = pulsusPlus.computeSections();
+            }
+            pulsusPlus.sMenu.lastSel = clevels[menu.lvl.sel];
+            pulsusPlus.sMenu.practice = true;
+            pulsusPlus.sMenu.practiceY = 1});
+        pulsusPlus.modMenuButton(2, "Close", vw*11/2+vw, vw*7 + vw*3/2, vw*11, vw*3, () => {pulsusPlus.sMenu.mods = false; pulsusPlus.sMenu.modsY = 0; pulsusPlus.sMenu.lastSel = clevels[menu.lvl.sel]});
 
         if(pulsusPlus.sMenu.currToolTip !== null) {
             push();
@@ -2270,7 +2284,7 @@ window.addEventListener("SetupComplete", function() {
                 fill(255 * ((millis()/1000/10)%1), 102, 255),
                 text(\`PulsusPlus \$\{pulsusPlus.version + (pulsusPlus.dev ? "-dev" : "")\}\`, a, height-a-(2*textLeading())),
                 fill(theme.text),
-                text(d + "\\nTetroGem 2024", a, height-a)
+                text(d + "\\nTetroGem 2025", a, height-a)
             ),pop()),
             `)
             .replace(`case"success"`, `case "warning": r = color(255, 175, 0);break;case "success"`)
@@ -2496,12 +2510,12 @@ window.addEventListener("SetupComplete", function() {
             pulsusPlus.game.breakProgress += pulsusPlus.forceEase(breakProgress, pulsusPlus.game.breakProgress, .1);
             let skippable, drawable, progStart, progEnd;
             if(isStart) {
-                skippable = untilNext > 4 && game.time >= pulsusPlus.game.holding;
-                drawable = untilNext > 3.5 && game.time >= pulsusPlus.game.holding;
+                skippable = untilNext > 4 && (pulsusPlus.game.holding === 0 || game.time >= pulsusPlus.game.holding);
+                drawable = untilNext > 3.5 && (pulsusPlus.game.holding === 0 || game.time >= pulsusPlus.game.holding);
                 progStart = 1;
             } else {
-                skippable = untilNext > 4 && spacing > 8 && game.time >= pulsusPlus.game.holding;
-                drawable = untilNext > 3.5 && spacing > 8 && game.time >= pulsusPlus.game.holding;
+                skippable = untilNext > 4 && spacing > 8 && (pulsusPlus.game.holding === 0 || game.time >= pulsusPlus.game.holding);
+                drawable = untilNext > 3.5 && spacing > 8 && (pulsusPlus.game.holding === 0 || game.time >= pulsusPlus.game.holding);
                 progStart = constrain(spacing - untilNext, 0, 1);
             };
             progEnd = constrain(untilNext-3.5, 0, .5) / .5;
@@ -2841,7 +2855,7 @@ window.addEventListener("SetupComplete", function() {
                 return;
             }`)};
         quitEditor = ${pulsusPlus.functionReplace(quitEditor, "end", `;
-            pulsusPlus.computeSections();
+            pulsusPlus.sMenu.practiceSections = pulsusPlus.computeSections();
             game.mods.startPos = 0;
             game.mods.endPos = pulsusPlus.game.lvlDuration;
             game.mods.hidden = false;
@@ -2881,6 +2895,7 @@ window.addEventListener("SetupComplete", function() {
                 pulsusPlus.game.lvlDuration = duration;
                 Object.keys(pulsusPlus.sMenu.practiceSliders).forEach(key => { pulsusPlus.sMenu.practiceSliders[key].max = duration });
                 game.mods.endPos = duration;
+                game.modsDef.endPos = duration;
             })(),
             Bt.lvl.showMods ? Bt.lvl.modsX`)
             .replace(/mods_scoreMultiplier",.*?\.mods\)/, `mods_scoreMultiplier", langSel, calcScoreMulti(Object.fromEntries(Object.entries(game.mods).map(m => {if(m[0].match(/(start|end)pos/gi)) {return [m[0], 0]} else {return m}})))`)
